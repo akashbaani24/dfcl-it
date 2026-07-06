@@ -186,6 +186,11 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ ok: true })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    // Return 409 Conflict for constraint errors (data exists, can't delete)
+    const msg = e.message || 'Failed to delete'
+    if (msg.includes('delete করা যাবে না') || msg.includes('delete করার আগে') || msg.includes('FOREIGN KEY')) {
+      return NextResponse.json({ error: msg }, { status: 409 })
+    }
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

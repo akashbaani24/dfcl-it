@@ -1,162 +1,193 @@
 // Cascading delete utilities — safely delete records that have foreign key relations
-// Prevents "FOREIGN KEY constraint failed" errors by deleting children first
+// Prevents "FOREIGN KEY constraint failed" errors
+// Policy: If related transactions exist, BLOCK deletion and suggest deactivation instead
 import { db } from '@/lib/db'
 
-// Delete an entity and ALL its related data (departments, employees, suppliers, etc.)
+// ============ ENTITY ============
+
+// Check if an entity has any related data that should block deletion
+export async function checkEntityHasData(entityId: string): Promise<{ hasData: boolean; message: string }> {
+  const [
+    departments, employees, suppliers, itemSerials, stockTxs,
+    reqs, purchases, sales, transfers, adjustments, accountEntries,
+  ] = await Promise.all([
+    db.department.count({ where: { entityId } }),
+    db.employee.count({ where: { entityId } }),
+    db.supplier.count({ where: { entityId } }),
+    db.itemSerial.count({ where: { entityId } }),
+    db.stockTransaction.count({ where: { entityId } }),
+    db.purchaseRequisition.count({ where: { entityId } }),
+    db.purchase.count({ where: { entityId } }),
+    db.sales.count({ where: { entityId } }),
+    db.internalTransfer.count({ where: { OR: [{ fromEntityId: entityId }, { toEntityId: entityId }] } }),
+    db.adjustment.count({ where: { entityId } }),
+    db.accountEntry.count({ where: { entityId } }),
+  ])
+
+  const total = departments + employees + suppliers + itemSerials + stockTxs + reqs + purchases + sales + transfers + adjustments + accountEntries
+
+  if (total === 0) return { hasData: false, message: '' }
+
+  const details: string[] = []
+  if (departments > 0) details.push(`${departments} department(s)`)
+  if (employees > 0) details.push(`${employees} employee(s)`)
+  if (suppliers > 0) details.push(`${suppliers} supplier(s)`)
+  if (itemSerials > 0) details.push(`${itemSerials} item serial(s)`)
+  if (stockTxs > 0) details.push(`${stockTxs} stock transaction(s)`)
+  if (reqs > 0) details.push(`${reqs} purchase requisition(s)`)
+  if (purchases > 0) details.push(`${purchases} purchase(s)`)
+  if (sales > 0) details.push(`${sales} sales order(s)`)
+  if (transfers > 0) details.push(`${transfers} internal transfer(s)`)
+  if (adjustments > 0) details.push(`${adjustments} adjustment(s)`)
+  if (accountEntries > 0) details.push(`${accountEntries} account entrie(s)`)
+
+  return {
+    hasData: true,
+    message: `এই Entity-র অধীনে লেনদেনকৃত ডাটা আছে: ${details.join(', ')}। এই Entity delete করা যাবে না। সর্বোচ্চ inactive করতে পারবেন।`,
+  }
+}
+
+// Delete an entity only if no related data exists (otherwise throws)
 export async function deleteEntityCascade(entityId: string) {
-  // 1. Delete departments under this entity (employees must be deleted first)
-  const departments = await db.department.findMany({ where: { entityId } })
-  for (const dep of departments) {
-    // Delete employees in this department
-    const employees = await db.employee.findMany({ where: { departmentId: dep.id } })
-    for (const emp of employees) {
-      // Delete user + permissions + userEntities for this employee
-      const user = await db.user.findUnique({ where: { employeeId: emp.id } })
-      if (user) {
-        await db.permission.deleteMany({ where: { userId: user.id } })
-        await db.userEntity.deleteMany({ where: { userId: user.id } })
-        await db.user.delete({ where: { id: user.id } })
-      }
-      await db.employee.delete({ where: { id: emp.id } })
-    }
-    await db.department.delete({ where: { id: dep.id } })
+  const check = await checkEntityHasData(entityId)
+  if (check.hasData) {
+    throw new Error(check.message)
   }
-
-  // 2. Delete suppliers under this entity
-  await db.supplier.deleteMany({ where: { entityId } })
-
-  // 3. Delete item serials held by this entity
-  await db.itemSerial.deleteMany({ where: { entityId } })
-
-  // 4. Delete stock transactions for this entity
-  await db.stockTransaction.deleteMany({ where: { entityId } })
-
-  // 5. Delete purchase requisitions for this entity (and their items)
-  const reqs = await db.purchaseRequisition.findMany({ where: { entityId } })
-  for (const r of reqs) {
-    await db.purchaseRequisitionItem.deleteMany({ where: { requisitionId: r.id } })
-    await db.purchaseRequisition.delete({ where: { id: r.id } })
-  }
-
-  // 6. Delete purchases for this entity (and their items + returns)
-  const purchases = await db.purchase.findMany({ where: { entityId } })
-  for (const p of purchases) {
-    const returns = await db.purchaseReturn.findMany({ where: { purchaseId: p.id } })
-    for (const r of returns) {
-      await db.purchaseReturnItem.deleteMany({ where: { returnId: r.id } })
-      await db.purchaseReturn.delete({ where: { id: r.id } })
-    }
-    await db.purchaseItem.deleteMany({ where: { purchaseId: p.id } })
-    await db.purchase.delete({ where: { id: p.id } })
-  }
-
-  // 7. Delete sales for this entity (and their items + returns + refunds)
-  const sales = await db.sales.findMany({ where: { entityId } })
-  for (const s of sales) {
-    const returns = await db.salesReturn.findMany({ where: { salesId: s.id } })
-    for (const r of returns) {
-      await db.salesReturnItem.deleteMany({ where: { returnId: r.id } })
-      await db.salesRefund.deleteMany({ where: { returnId: r.id } })
-      await db.salesReturn.delete({ where: { id: r.id } })
-    }
-    await db.salesRefund.deleteMany({ where: { salesId: s.id } })
-    await db.salesItem.deleteMany({ where: { salesId: s.id } })
-    await db.sales.delete({ where: { id: s.id } })
-  }
-
-  // 8. Delete internal transfers (as source or destination)
-  await db.internalTransferItem.deleteMany({
-    where: { transfer: { OR: [{ fromEntityId: entityId }, { toEntityId: entityId }] } }
-  })
-  await db.internalTransfer.deleteMany({
-    where: { OR: [{ fromEntityId: entityId }, { toEntityId: entityId }] }
-  })
-
-  // 9. Delete adjustments for this entity
-  const adjustments = await db.adjustment.findMany({ where: { entityId } })
-  for (const a of adjustments) {
-    await db.adjustmentItem.deleteMany({ where: { adjustmentId: a.id } })
-    await db.adjustment.delete({ where: { id: a.id } })
-  }
-
-  // 10. Delete account entries for this entity
-  await db.accountEntry.deleteMany({ where: { entityId } })
-
-  // 11. Delete user-entity assignments
+  // Safe to delete — only clean up user-entity assignments (no transactional data)
   await db.userEntity.deleteMany({ where: { entityId } })
-
-  // 12. Clear parent reference from child entities (they become root)
+  // Clear parent reference from child entities
   await db.entity.updateMany({ where: { parentId: entityId }, data: { parentId: null } })
-
-  // Finally delete the entity itself
   await db.entity.delete({ where: { id: entityId } })
 }
 
-// Delete an employee and related user account
-export async function deleteEmployeeCascade(employeeId: string) {
+// ============ EMPLOYEE ============
+
+// Check if an employee has any related data that should block deletion
+export async function checkEmployeeHasData(employeeId: string): Promise<{ hasData: boolean; message: string }> {
+  // Get the user account for this employee
   const user = await db.user.findUnique({ where: { employeeId } })
+
+  // An employee is typically linked to a department, and the department is linked to an entity
+  // The employee record itself may not have direct transactions, but their user account
+  // may have created records. For now, we check if the employee has a user account.
   if (user) {
-    await db.permission.deleteMany({ where: { userId: user.id } })
-    await db.userEntity.deleteMany({ where: { userId: user.id } })
-    await db.user.delete({ where: { id: user.id } })
+    return {
+      hasData: true,
+      message: `এই Employee-র একটি login account আছে (${user.userId})। Employee delete করার আগে প্রথমে login account delete করুন, অথবা employee-কে inactive করুন।`,
+    }
+  }
+  return { hasData: false, message: '' }
+}
+
+// Delete an employee only if no related data exists (otherwise throws)
+export async function deleteEmployeeCascade(employeeId: string) {
+  const check = await checkEmployeeHasData(employeeId)
+  if (check.hasData) {
+    throw new Error(check.message)
   }
   await db.employee.delete({ where: { id: employeeId } })
 }
 
-// Delete a department and its employees (with their users)
+// ============ DEPARTMENT ============
+
+// Check if a department has any related data that should block deletion
+export async function checkDepartmentHasData(departmentId: string): Promise<{ hasData: boolean; message: string }> {
+  const employeeCount = await db.employee.count({ where: { departmentId } })
+  if (employeeCount > 0) {
+    return {
+      hasData: true,
+      message: `এই Department-এ ${employeeCount} জন employee আছে। Department delete করার আগে প্রথমে employees সরান বা inactive করুন।`,
+    }
+  }
+  return { hasData: false, message: '' }
+}
+
 export async function deleteDepartmentCascade(departmentId: string) {
-  const employees = await db.employee.findMany({ where: { departmentId } })
-  for (const emp of employees) {
-    await deleteEmployeeCascade(emp.id)
+  const check = await checkDepartmentHasData(departmentId)
+  if (check.hasData) {
+    throw new Error(check.message)
   }
   await db.department.delete({ where: { id: departmentId } })
 }
 
-// Delete an item and its serials + stock transactions
+// ============ ITEM ============
+
+// Check if an item has any related data that should block deletion
+export async function checkItemHasData(itemId: string): Promise<{ hasData: boolean; message: string }> {
+  const [
+    serials, stockTxs, reqItems, purchaseItems, purchaseReturnItems,
+    salesItems, salesReturnItems, transferItems, adjustmentItems,
+  ] = await Promise.all([
+    db.itemSerial.count({ where: { itemId } }),
+    db.stockTransaction.count({ where: { itemId } }),
+    db.purchaseRequisitionItem.count({ where: { itemId } }),
+    db.purchaseItem.count({ where: { itemId } }),
+    db.purchaseReturnItem.count({ where: { itemId } }),
+    db.salesItem.count({ where: { itemId } }),
+    db.salesReturnItem.count({ where: { itemId } }),
+    db.internalTransferItem.count({ where: { itemId } }),
+    db.adjustmentItem.count({ where: { itemId } }),
+  ])
+
+  const total = serials + stockTxs + reqItems + purchaseItems + purchaseReturnItems + salesItems + salesReturnItems + transferItems + adjustmentItems
+
+  if (total === 0) return { hasData: false, message: '' }
+
+  const details: string[] = []
+  if (serials > 0) details.push(`${serials} serial number(s)`)
+  if (stockTxs > 0) details.push(`${stockTxs} stock transaction(s)`)
+  if (reqItems > 0) details.push(`${reqItems} purchase requisition item(s)`)
+  if (purchaseItems > 0) details.push(`${purchaseItems} purchase item(s)`)
+  if (purchaseReturnItems > 0) details.push(`${purchaseReturnItems} purchase return item(s)`)
+  if (salesItems > 0) details.push(`${salesItems} sales item(s)`)
+  if (salesReturnItems > 0) details.push(`${salesReturnItems} sales return item(s)`)
+  if (transferItems > 0) details.push(`${transferItems} transfer item(s)`)
+  if (adjustmentItems > 0) details.push(`${adjustmentItems} adjustment item(s)`)
+
+  return {
+    hasData: true,
+    message: `এই Item-এর অধীনে লেনদেনকৃত ডাটা আছে: ${details.join(', ')}। এই Item delete করা যাবে না। সর্বোচ্চ inactive করতে পারবেন।`,
+  }
+}
+
 export async function deleteItemCascade(itemId: string) {
-  await db.itemSerial.deleteMany({ where: { itemId } })
-  await db.stockTransaction.deleteMany({ where: { itemId } })
-  // Remove from line items (purchase, sales, etc.) — set to null or delete
-  await db.purchaseRequisitionItem.deleteMany({ where: { itemId } })
-  await db.purchaseItem.deleteMany({ where: { itemId } })
-  await db.purchaseReturnItem.deleteMany({ where: { itemId } })
-  await db.salesItem.deleteMany({ where: { itemId } })
-  await db.salesReturnItem.deleteMany({ where: { itemId } })
-  await db.internalTransferItem.deleteMany({ where: { itemId } })
-  await db.adjustmentItem.deleteMany({ where: { itemId } })
+  const check = await checkItemHasData(itemId)
+  if (check.hasData) {
+    throw new Error(check.message)
+  }
   await db.item.delete({ where: { id: itemId } })
 }
 
-// Delete a user and their permissions + entity assignments
+// ============ CATEGORY ============
+
+export async function deleteCategoryCascade(categoryId: string) {
+  const [childCount, itemCount] = await Promise.all([
+    db.category.count({ where: { parentId: categoryId } }),
+    db.item.count({ where: { categoryId } }),
+  ])
+  if (childCount > 0 || itemCount > 0) {
+    const parts: string[] = []
+    if (childCount > 0) parts.push(`${childCount} sub-category(s)`)
+    if (itemCount > 0) parts.push(`${itemCount} item(s)`)
+    throw new Error(`এই Category-র অধীনে ${parts.join(', ')} আছে। Category delete করা যাবে না। প্রথমে সেগুলো সরান বা inactive করুন।`)
+  }
+  await db.category.delete({ where: { id: categoryId } })
+}
+
+// ============ SUPPLIER ============
+
+export async function deleteSupplierCascade(supplierId: string) {
+  const purchaseCount = await db.purchase.count({ where: { supplierId } })
+  if (purchaseCount > 0) {
+    throw new Error(`এই Supplier-এর সাথে ${purchaseCount} টি purchase আছে। Supplier delete করা যাবে না। সর্বোচ্চ inactive করতে পারবেন।`)
+  }
+  await db.supplier.delete({ where: { id: supplierId } })
+}
+
+// ============ USER (login account) ============
+
 export async function deleteUserCascade(userId: string) {
   await db.permission.deleteMany({ where: { userId } })
   await db.userEntity.deleteMany({ where: { userId } })
   await db.user.delete({ where: { id: userId } })
-}
-
-// Delete a category and reassign children/items to parent (or null)
-export async function deleteCategoryCascade(categoryId: string) {
-  // Get parent before deletion
-  const cat = await db.category.findUnique({ where: { id: categoryId } })
-  if (!cat) return
-  // Reassign children to parent
-  await db.category.updateMany({
-    where: { parentId: categoryId },
-    data: { parentId: cat.parentId || null }
-  })
-  // Reassign items to parent category
-  await db.item.updateMany({
-    where: { categoryId },
-    data: { categoryId: cat.parentId || null }
-  })
-  await db.category.delete({ where: { id: categoryId } })
-}
-
-// Delete a supplier (purchases remain but with null supplier? No — block if has purchases)
-export async function deleteSupplierCascade(supplierId: string) {
-  const purchases = await db.purchase.findMany({ where: { supplierId } })
-  if (purchases.length > 0) {
-    throw new Error(`Cannot delete supplier: ${purchases.length} purchase(s) reference this supplier. Delete those purchases first.`)
-  }
-  await db.supplier.delete({ where: { id: supplierId } })
 }
