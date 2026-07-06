@@ -1,15 +1,13 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
-import { FormDialog, FieldDef } from '@/components/shared/FormDialog'
-import { useEffect, useState } from 'react'
+import { FieldDef } from '@/components/shared/FormDialog'
+import { useEffect, useState, useCallback } from 'react'
 import { list } from '@/lib/api'
 
 const columns: Col[] = [
   { key: 'name', label: 'Entity Name' },
   { key: 'shortCode', label: 'Short Code' },
-  {
-    key: 'parentId', label: 'Parent', render: (r) => r.parent?.name || '— (Root)'
-  },
+  { key: 'parentId', label: 'Parent', render: (r) => r.parent?.name || '— (Root)' },
   { key: 'address', label: 'Address' },
   { key: 'phone', label: 'Phone' },
   { key: 'email', label: 'Email' },
@@ -18,8 +16,13 @@ const columns: Col[] = [
 
 export function EntitiesPage() {
   const [entities, setEntities] = useState<any[]>([])
-  const loadEntities = () => list('entities').then((r) => setEntities(r as any[])).catch(() => {})
-  useEffect(() => { loadEntities() }, [])
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const loadEntities = useCallback(() => {
+    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
+  }, [])
+
+  useEffect(() => { loadEntities() }, [loadEntities, refreshKey])
 
   const fields: FieldDef[] = [
     { name: 'name', label: 'Entity Name', required: true, placeholder: 'e.g. Dhaka Showroom' },
@@ -44,6 +47,7 @@ export function EntitiesPage() {
       fields={fields}
       columns={columns}
       addLabel="Add Entity"
+      onDataChange={() => setRefreshKey((k) => k + 1)}
     />
   )
 }

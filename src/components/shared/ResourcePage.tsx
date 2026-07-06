@@ -29,9 +29,10 @@ export function ResourcePage({
   searchField = 'search',
   extraControls,
   onRowClick,
-  filter,         // server-side filter params to apply on every list call
-  defaultValues,  // values to inject on create (e.g. type=EXPENSE)
-  moduleKey,      // permission module key — defaults to slug
+  filter,
+  defaultValues,
+  moduleKey,
+  onDataChange,  // called after create/update/delete so parent can refresh
 }: {
   slug: any
   title: string
@@ -45,6 +46,7 @@ export function ResourcePage({
   filter?: Record<string, string>
   defaultValues?: Record<string, any>
   moduleKey?: string
+  onDataChange?: () => void
 }) {
   const { hasPerm } = useAuth()
   const permModule = moduleKey || (slug as string)
@@ -94,6 +96,7 @@ export function ResourcePage({
       await remove(slug, row.id)
       toast.success('Deleted')
       load()
+      onDataChange?.()
     } catch (e: any) {
       toast.error(e.message || 'Failed to delete')
     }
@@ -108,6 +111,7 @@ export function ResourcePage({
       toast.success('Created')
     }
     load()
+    onDataChange?.()
   }
 
   // Build export columns from `columns` (skip render-only fields — use raw row value)

@@ -10,5 +10,6 @@ export async function GET() {
     role: user.role,
     employee: user.employee,
     permissions: user.permissions,
+    userEntities: user.userEntities,
   })
 }

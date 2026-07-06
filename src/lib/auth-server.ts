@@ -53,8 +53,19 @@ export async function getCurrentUser() {
   if (!userId) return null
   const user = await db.user.findUnique({
     where: { id: userId },
-    include: { employee: true, permissions: true },
+    include: { employee: true, permissions: true, userEntities: { include: { entity: true } } },
   })
   if (!user || !user.isActive) return null
   return user
+}
+
+// Get the entity IDs a user is assigned to. Admin = all entities (empty array means "all" for admin)
+export async function getUserEntityIds(userId: string): Promise<string[] | null> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: { userEntities: true },
+  })
+  if (!user) return null
+  if (user.role === 'ADMIN') return null // null = no restriction
+  return user.userEntities.map((ue) => ue.entityId)
 }

@@ -39,6 +39,7 @@ import { ReportsPurchasePage } from '@/components/modules/ReportsPurchasePage'
 import { ReportsSalesPage } from '@/components/modules/ReportsSalesPage'
 import { ReportsAccountsPage } from '@/components/modules/ReportsAccountsPage'
 import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
+import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPage'
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
@@ -161,7 +162,7 @@ import { PermissionAction } from '@/lib/auth'
 
 function SidebarCompact({ onPick, setActive, hasPerm }: { onPick: () => void; setActive: (m: any) => void; hasPerm: (m: string, a: PermissionAction) => boolean }) {
   const [open, setOpen] = useState<Record<string, boolean>>(
-    Object.fromEntries(SECTIONS.map((s) => [s.title, s.defaultOpen ?? false]))
+    Object.fromEntries(SECTIONS.map((s) => [s.title, true]))
   )
   const visibleSections = SECTIONS.map((sec) => ({
     ...sec,
@@ -235,6 +236,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'reports-sales': return <ReportsSalesPage />
     case 'reports-accounts': return <ReportsAccountsPage />
     case 'reports-serial': return <ReportsSerialPage />
+    case 'manage-permissions': return <ManagePermissionsPage />
     default: return <Dashboard />
   }
 }

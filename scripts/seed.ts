@@ -51,135 +51,101 @@ async function main() {
   await db.department.create({ data: { name: 'Store', shortCode: 'STR', entityId: warehouse.id } })
 
   // 3. Employees
-  await db.employee.create({ data: { name: 'Rahim Uddin', employeeCode: 'EMP-001', designation: 'Sales Manager', phone: '+8801911111111', departmentId: depSales.id, entityId: hq.id } })
-  await db.employee.create({ data: { name: 'Karim Hossain', employeeCode: 'EMP-002', designation: 'Purchase Officer', phone: '+8801922222222', departmentId: depPurchase.id, entityId: hq.id } })
+  const emp1 = await db.employee.create({ data: { name: 'Rahim Uddin', employeeCode: 'EMP-001', designation: 'Sales Manager', phone: '+8801911111111', departmentId: depSales.id, entityId: hq.id } })
+  const emp2 = await db.employee.create({ data: { name: 'Karim Hossain', employeeCode: 'EMP-002', designation: 'Purchase Officer', phone: '+8801922222222', departmentId: depPurchase.id, entityId: hq.id } })
   await db.employee.create({ data: { name: 'Salma Akter', employeeCode: 'EMP-003', designation: 'Accountant', phone: '+8801933333333', departmentId: depAccounts.id, entityId: hq.id } })
 
   // 4. UoM
   const pcs = await db.uoM.create({ data: { name: 'Pieces', shortCode: 'PCS' } })
-  const box = await db.uoM.create({ data: { name: 'Box', shortCode: 'BOX' } })
-  const set = await db.uoM.create({ data: { name: 'Set', shortCode: 'SET' } })
+  await db.uoM.create({ data: { name: 'Box', shortCode: 'BOX' } })
+  await db.uoM.create({ data: { name: 'Set', shortCode: 'SET' } })
 
   // 5. Suppliers
   await db.supplier.create({ data: { name: 'Tech Distributors BD', shortCode: 'TDB', phone: '+8801555555555', email: 'sales@tdb.bd', address: 'Elephant Road, Dhaka', entityId: hq.id } })
   await db.supplier.create({ data: { name: 'Mobile World Ltd', shortCode: 'MWL', phone: '+8801666666666', email: 'info@mwl.bd', address: 'Nawabpur, Dhaka', entityId: hq.id } })
 
-  // 6. Categories (multi-level)
-  const mobile = await db.category.create({ data: { name: 'Mobile', shortCode: 'MOB' } })
-  const computer = await db.category.create({ data: { name: 'Computer', shortCode: 'CMP' } })
-  const samsungMobile = await db.category.create({ data: { name: 'Samsung Mobile', shortCode: 'SMS-MOB', parentId: mobile.id } })
-  const appleMobile = await db.category.create({ data: { name: 'Apple Mobile', shortCode: 'APL-MOB', parentId: mobile.id } })
-  const laptop = await db.category.create({ data: { name: 'Laptop', shortCode: 'LAP', parentId: computer.id } })
-  const desktop = await db.category.create({ data: { name: 'Desktop', shortCode: 'DTP', parentId: computer.id } })
-  const cpu = await db.category.create({ data: { name: 'CPU', shortCode: 'CPU', parentId: computer.id } })
+  // NOTE: Categories, Sub-Categories, Items, Serials — admin will create from scratch
+  // (No pre-seeded category data)
 
-  // 7. Items (with barcodes; some hasSerial true)
-  const iphone15 = await db.item.create({ data: { name: 'iPhone 15 Pro 256GB', itemCode: 'APL-IP15P-256', barcode: '8901001000011', categoryId: appleMobile.id, uomId: pcs.id, hasSerial: true, description: 'Apple iPhone 15 Pro, 256GB, Titanium' } })
-  const galaxyS24 = await db.item.create({ data: { name: 'Samsung Galaxy S24 Ultra', itemCode: 'SMS-S24U-512', barcode: '8901001000028', categoryId: samsungMobile.id, uomId: pcs.id, hasSerial: true, description: 'Samsung Galaxy S24 Ultra, 512GB' } })
-  const macbook = await db.item.create({ data: { name: 'MacBook Air M3 13"', itemCode: 'APL-MBA-M3', barcode: '8901002000011', categoryId: laptop.id, uomId: pcs.id, hasSerial: true, description: 'MacBook Air M3, 13-inch, 8GB/256GB' } })
-  const dellLaptop = await db.item.create({ data: { name: 'Dell Inspiron 15 5000', itemCode: 'DLL-INSP-15', barcode: '8901002000028', categoryId: laptop.id, uomId: pcs.id, hasSerial: true } })
-  const hpDesktop = await db.item.create({ data: { name: 'HP Pavilion Desktop', itemCode: 'HP-PAV-DT', barcode: '8901003000011', categoryId: desktop.id, uomId: pcs.id, hasSerial: true } })
-  const intelCPU = await db.item.create({ data: { name: 'Intel Core i7-13700', itemCode: 'INT-i7-13700', barcode: '8901004000011', categoryId: cpu.id, uomId: pcs.id, hasSerial: true } })
-  const mouse = await db.item.create({ data: { name: 'Logitech Wireless Mouse', itemCode: 'LOG-MOUSE-WL', barcode: '8901005000011', categoryId: cpu.id, uomId: pcs.id, hasSerial: false } })
-  const keyboard = await db.item.create({ data: { name: 'A4Tech Keyboard', itemCode: 'A4T-KB-001', barcode: '8901005000028', categoryId: cpu.id, uomId: pcs.id, hasSerial: false } })
-
-  // 8. Item Serials for demo (some pre-existing stock at Warehouse)
-  const serialsData = [
-    { item: iphone15, serials: ['IP15P-A1B2C3', 'IP15P-D4E5F6', 'IP15P-G7H8I9'], entity: warehouse.id },
-    { item: galaxyS24, serials: ['S24U-001', 'S24U-002', 'S24U-003', 'S24U-004', 'S24U-005'], entity: warehouse.id },
-    { item: macbook, serials: ['MBA-M3-001', 'MBA-M3-002'], entity: branch1.id },
-    { item: dellLaptop, serials: ['DLL-INSP-001', 'DLL-INSP-002', 'DLL-INSP-003'], entity: warehouse.id },
-    { item: hpDesktop, serials: ['HP-PAV-001', 'HP-PAV-002'], entity: warehouse.id },
-    { item: intelCPU, serials: ['I7-13700-001', 'I7-13700-002', 'I7-13700-003', 'I7-13700-004'], entity: warehouse.id },
-  ]
-  for (const s of serialsData) {
-    for (const sn of s.serials) {
-      await db.itemSerial.create({ data: { itemId: s.item.id, serialNumber: sn, entityId: s.entity, status: 'IN_STOCK' } })
-      await db.stockTransaction.create({ data: { itemId: s.item.id, entityId: s.entity, type: 'OPENING', quantity: 1 } })
-    }
-  }
-  await db.stockTransaction.create({ data: { itemId: mouse.id, entityId: warehouse.id, type: 'OPENING', quantity: 50 } })
-  await db.stockTransaction.create({ data: { itemId: keyboard.id, entityId: warehouse.id, type: 'OPENING', quantity: 30 } })
-
-  // 9. News ticker
+  // 6. News ticker
   await db.newsTicker.create({ data: { message: 'Welcome to InventoryPro - Stock managed by Barcode & Serial Number', sortOrder: 1 } })
-  await db.newsTicker.create({ data: { message: 'New stock arrived at Central Warehouse - please verify serials', sortOrder: 2 } })
-  await db.newsTicker.create({ data: { message: 'Reminder: Approve pending purchase requisitions before EOD', sortOrder: 3 } })
+  await db.newsTicker.create({ data: { message: 'Create categories & items from Company Setup menu', sortOrder: 2 } })
+  await db.newsTicker.create({ data: { message: 'Assign entity access to users from Manage Permissions', sortOrder: 3 } })
 
-  // 10. Some accounts entries
+  // 7. Some accounts entries
   await db.accountEntry.create({ data: { entryNo: 'EXP-0001', entityId: hq.id, type: 'EXPENSE', category: 'RENT', amount: 35000, method: 'BANK', description: 'Office rent for July' } })
   await db.accountEntry.create({ data: { entryNo: 'EXP-0002', entityId: hq.id, type: 'EXPENSE', category: 'UTILITIES', amount: 4800, method: 'CASH', description: 'Electricity bill' } })
   await db.accountEntry.create({ data: { entryNo: 'RCV-0001', entityId: hq.id, type: 'RECEIVE', category: 'SALES_PAYMENT', amount: 125000, method: 'BANK', description: 'Bulk sales payment received' } })
 
-  // 11. Create admin user (full permissions) + a sample sales user (limited permissions)
-  const adminEmp = await db.employee.findFirst({ where: { employeeCode: 'EMP-001' } })
-  if (adminEmp) {
-    const admin = await db.user.create({
+  // 8. Admin user (full permissions, all entities)
+  const admin = await db.user.create({
+    data: {
+      userId: 'admin',
+      password: hashPassword('admin123'),
+      employeeId: emp1.id,
+      role: 'ADMIN',
+      isActive: true,
+    },
+  })
+  for (const m of ALL_MODULES) {
+    await db.permission.create({
       data: {
-        userId: 'admin',
-        password: hashPassword('admin123'),
-        employeeId: adminEmp.id,
-        role: 'ADMIN',
-        isActive: true,
+        userId: admin.id,
+        module: m.key,
+        canView: true, canCreate: true, canEdit: true, canDelete: true,
+        canUpdate: true, canExcel: true, canPdf: true,
       },
     })
-    // Admin gets full permissions on every module
-    for (const m of ALL_MODULES) {
-      await db.permission.create({
-        data: {
-          userId: admin.id,
-          module: m.key,
-          canView: true, canCreate: true, canEdit: true, canDelete: true,
-          canUpdate: true, canExcel: true, canPdf: true,
-        },
-      })
-    }
+  }
+  // Admin: assign ALL entities
+  for (const e of [hq, branch1, branch2, warehouse]) {
+    await db.userEntity.create({ data: { userId: admin.id, entityId: e.id } })
   }
 
-  const salesEmp = await db.employee.findFirst({ where: { employeeCode: 'EMP-002' } })
-  if (salesEmp) {
-    const salesUser = await db.user.create({
+  // 9. Sales user (limited permissions, assigned to Dhaka Showroom only)
+  const salesUser = await db.user.create({
+    data: {
+      userId: 'sales',
+      password: hashPassword('sales123'),
+      employeeId: emp2.id,
+      role: 'USER',
+      isActive: true,
+    },
+  })
+  const salesPerms: Record<string, any> = {
+    'dashboard': { canView: true, canExcel: true, canPdf: true },
+    'sales': { canView: true, canCreate: true, canEdit: true, canExcel: true, canPdf: true },
+    'sales-delivery': { canView: true, canUpdate: true },
+    'sales-returns': { canView: true, canCreate: true },
+    'sales-refunds': { canView: true, canCreate: true },
+    'stock-all': { canView: true },
+    'stock-mine': { canView: true },
+    'reports-sales': { canView: true, canExcel: true, canPdf: true },
+    'reports-stock': { canView: true },
+    'reports-serial': { canView: true },
+    'items': { canView: true },
+  }
+  for (const [module, flags] of Object.entries(salesPerms)) {
+    await db.permission.create({
       data: {
-        userId: 'sales',
-        password: hashPassword('sales123'),
-        employeeId: salesEmp.id,
-        role: 'USER',
-        isActive: true,
+        userId: salesUser.id,
+        module,
+        canView: !!flags.canView,
+        canCreate: !!flags.canCreate,
+        canEdit: !!flags.canEdit,
+        canDelete: !!flags.canDelete,
+        canUpdate: !!flags.canUpdate,
+        canExcel: !!flags.canExcel,
+        canPdf: !!flags.canPdf,
       },
     })
-    // Sales user: can view dashboard + sales + stock, can create/edit sales, no admin/setup access
-    const salesPerms: Record<string, any> = {
-      'dashboard': { canView: true, canExcel: true, canPdf: true },
-      'sales': { canView: true, canCreate: true, canEdit: true, canExcel: true, canPdf: true },
-      'sales-delivery': { canView: true, canUpdate: true },
-      'sales-returns': { canView: true, canCreate: true },
-      'sales-refunds': { canView: true, canCreate: true },
-      'stock-all': { canView: true },
-      'stock-mine': { canView: true },
-      'reports-sales': { canView: true, canExcel: true, canPdf: true },
-      'reports-stock': { canView: true },
-      'reports-serial': { canView: true },
-    }
-    for (const [module, flags] of Object.entries(salesPerms)) {
-      await db.permission.create({
-        data: {
-          userId: salesUser.id,
-          module,
-          canView: !!flags.canView,
-          canCreate: !!flags.canCreate,
-          canEdit: !!flags.canEdit,
-          canDelete: !!flags.canDelete,
-          canUpdate: !!flags.canUpdate,
-          canExcel: !!flags.canExcel,
-          canPdf: !!flags.canPdf,
-        },
-      })
-    }
   }
+  // Sales user: assign only Dhaka Showroom
+  await db.userEntity.create({ data: { userId: salesUser.id, entityId: branch1.id } })
 
   console.log('Seed complete.')
-  console.log('  Admin login:    admin / admin123')
-  console.log('  Sales login:    sales / sales123')
+  console.log('  Admin login:    admin / admin123  (all entities, all permissions)')
+  console.log('  Sales login:    sales / sales123  (Dhaka Showroom only, limited permissions)')
 }
 
 main()

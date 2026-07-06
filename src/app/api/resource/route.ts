@@ -7,6 +7,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { RESOURCES, generateNumber, buildWhere } from '@/lib/resources'
+import { getCurrentUser, getUserEntityIds } from '@/lib/auth-server'
+
+// Resources that have an entityId field (need entity filtering for non-admin)
+const ENTITY_FILTERED_RESOURCES = new Set([
+  'entities', 'departments', 'employees', 'suppliers',
+  'purchase-requisitions', 'purchases', 'purchase-returns',
+  'internal-transfers', 'adjustments', 'stock-transactions',
+  'sales', 'sales-returns', 'sales-refunds',
+  'account-entries', 'item-serials',
+])
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -19,6 +29,14 @@ export async function GET(req: NextRequest) {
   const cfg = RESOURCES[slug]
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]
+
+  // Entity access control
+  const currentUser = await getCurrentUser()
+  let entityFilter: string[] | null = null
+  if (currentUser && currentUser.role !== 'ADMIN') {
+    entityFilter = await getUserEntityIds(currentUser.id)
+  }
+
   try {
     if (id) {
       const row = await model.findUnique({ where: { id }, include: cfg.include })
@@ -41,6 +59,24 @@ export async function GET(req: NextRequest) {
         where.name = { contains: search }
       }
     }
+
+    // Apply entity filter for non-admin users
+    if (entityFilter && entityFilter.length > 0 && ENTITY_FILTERED_RESOURCES.has(slug)) {
+      if (slug === 'entities') {
+        where.id = { in: entityFilter }
+      } else if (slug === 'internal-transfers') {
+        where.OR = [
+          { fromEntityId: { in: entityFilter } },
+          { toEntityId: { in: entityFilter } },
+        ]
+      } else {
+        where.entityId = { in: entityFilter }
+      }
+    } else if (entityFilter && entityFilter.length === 0 && ENTITY_FILTERED_RESOURCES.has(slug)) {
+      // Non-admin with no entity assignments — return empty
+      return NextResponse.json([])
+    }
+
     const rows = await model.findMany({ where, include: cfg.include, orderBy: { createdAt: 'desc' } })
     return NextResponse.json(rows)
   } catch (e: any) {
@@ -57,6 +93,17 @@ export async function POST(req: NextRequest) {
   const cfg = RESOURCES[slug]
   if (!cfg.writable) {
     return NextResponse.json({ error: 'Not writable' }, { status: 403 })
+  }
+  // Entity access control on create
+  const currentUser = await getCurrentUser()
+  if (currentUser && currentUser.role !== 'ADMIN') {
+    const entityIds = await getUserEntityIds(currentUser.id)
+    if (entityIds && ENTITY_FILTERED_RESOURCES.has(slug)) {
+      const dataEntityId = data.entityId || data.fromEntityId
+      if (dataEntityId && !entityIds.includes(dataEntityId)) {
+        return NextResponse.json({ error: 'You do not have access to this entity' }, { status: 403 })
+      }
+    }
   }
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]

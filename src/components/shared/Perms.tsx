@@ -19,6 +19,18 @@ export function usePerm(module: string) {
   }
 }
 
+// Hook to get the entities the current user can access (for dropdown filtering)
+// For admin: returns all entities passed in. For non-admin: filters by assigned entities.
+export function useAccessibleEntities() {
+  const { user } = useAuth()
+  return (allEntities: any[]) => {
+    if (!user) return []
+    if (user.role === 'ADMIN') return allEntities
+    const ids = (user.userEntities || []).map((ue: any) => ue.entityId)
+    return allEntities.filter((e) => ids.includes(e.id))
+  }
+}
+
 // Export buttons for non-ResourcePage list pages
 export function ExportButtons({
   module,

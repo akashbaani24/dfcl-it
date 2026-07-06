@@ -8,14 +8,19 @@ export type CurrentUser = {
   role: string  // ADMIN | USER
   employee: any
   permissions: any[]
+  userEntities: any[]  // [{ id, entityId, entity: { id, name, shortCode } }]
 }
 
 interface AuthState {
   user: CurrentUser | null
-  loading: boolean   // true while we are fetching /me
+  loading: boolean
   setAuth: (u: CurrentUser | null) => void
   setLoading: (v: boolean) => void
   hasPerm: (module: string, action: PermissionAction) => boolean
+  // Returns the entity IDs the user can access. Admin = null (all). Non-admin = array of IDs.
+  getEntityIds: () => string[] | null
+  // Returns true if user can access a specific entity
+  canAccessEntity: (entityId: string) => boolean
   logout: () => Promise<void>
 }
 
@@ -31,6 +36,18 @@ export const useAuth = create<AuthState>((set, get) => ({
     const p = u.permissions.find((perm) => perm.module === module)
     if (!p) return false
     return !!p[action]
+  },
+  getEntityIds: () => {
+    const u = get().user
+    if (!u) return []
+    if (u.role === 'ADMIN') return null  // null = no restriction
+    return (u.userEntities || []).map((ue) => ue.entityId)
+  },
+  canAccessEntity: (entityId) => {
+    const u = get().user
+    if (!u) return false
+    if (u.role === 'ADMIN') return true
+    return (u.userEntities || []).some((ue) => ue.entityId === entityId)
   },
   logout: async () => {
     await fetch('/api/auth/logout', { method: 'POST' })

@@ -11,7 +11,7 @@ export function Sidebar() {
   const { active, setActive, sidebarOpen } = useApp()
   const { hasPerm } = useAuth()
   const [open, setOpen] = useState<Record<string, boolean>>(
-    Object.fromEntries(SECTIONS.map((s) => [s.title, s.defaultOpen ?? false]))
+    Object.fromEntries(SECTIONS.map((s) => [s.title, true])) // all sections open by default
   )
 
   if (!sidebarOpen) return null
