@@ -12,17 +12,32 @@ import { list, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
-import { CheckCircle2, Eye, PackageCheck, ScanLine, ShoppingCart } from 'lucide-react'
+import { CheckCircle2, Eye, PackageCheck, ShoppingCart, Barcode } from 'lucide-react'
+
+// Each unit gets its own barcode + optional serial
+type ReceiveUnit = {
+  barcode: string    // auto-generated, shown as read-only
+  serial: string     // user enters (optional — from product body)
+}
 
 type ReceiveLine = {
   purchaseItemId: string
   itemId: string
   itemName: string
   itemCode: string
-  hasSerial: boolean
   orderedQty: number
   receiveQty: number
-  serials: string
+  units: ReceiveUnit[]  // per-unit barcodes + serials
+}
+
+// Generate barcode: yymmdd + 7-digit random
+function genBarcode(): string {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(-2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const random = String(Math.floor(Math.random() * 10000000)).padStart(7, '0')
+  return `${yy}${mm}${dd}${random}`
 }
 
 export function PurchaseReceivePage() {
@@ -33,14 +48,11 @@ export function PurchaseReceivePage() {
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
 
-  // Receive form
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [activePurchase, setActivePurchase] = useState<any>(null)
   const [lines, setLines] = useState<ReceiveLine[]>([])
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
-
-  // View dialog
   const [viewing, setViewing] = useState<any>(null)
 
   const load = useCallback(async () => {
@@ -57,9 +69,7 @@ export function PurchaseReceivePage() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
     if (!q) { setFiltered(receives); return }
@@ -68,7 +78,6 @@ export function PurchaseReceivePage() {
   }, [q, receives])
 
   const openReceiveForm = async (purchase: any) => {
-    // Fetch the full purchase (with items) so we can prefill the form
     try {
       const res = await fetch(`/api/resource?slug=purchases&id=${purchase.id}`)
       if (!res.ok) throw new Error(await res.text())
@@ -78,10 +87,9 @@ export function PurchaseReceivePage() {
         itemId: it.itemId,
         itemName: it.item?.name || '—',
         itemCode: it.item?.itemCode || '—',
-        hasSerial: !!it.item?.hasSerial,
         orderedQty: it.quantity,
         receiveQty: 0,
-        serials: '',
+        units: [],
       }))
       setActivePurchase(full)
       setLines(existing)
@@ -92,13 +100,42 @@ export function PurchaseReceivePage() {
     }
   }
 
-  const updateLine = (id: string, patch: Partial<ReceiveLine>) => {
-    setLines((prev) => prev.map((l) => (l.purchaseItemId === id ? { ...l, ...patch } : l)))
+  // When receiveQty changes, generate per-unit barcodes + empty serial inputs
+  const updateReceiveQty = (id: string, qty: number) => {
+    setLines((prev) => prev.map((l) => {
+      if (l.purchaseItemId !== id) return l
+      const safeQty = Math.min(qty, l.orderedQty)
+      // Generate barcodes for new units, keep existing serials
+      const newUnits: ReceiveUnit[] = []
+      for (let i = 0; i < safeQty; i++) {
+        if (l.units[i]) {
+          // Keep existing serial, but barcode may already be set
+          newUnits.push({
+            barcode: l.units[i].barcode || genBarcode(),
+            serial: l.units[i].serial || '',
+          })
+        } else {
+          newUnits.push({ barcode: genBarcode(), serial: '' })
+        }
+      }
+      return { ...l, receiveQty: safeQty, units: newUnits }
+    }))
+  }
+
+  // Update serial for a specific unit
+  const updateUnitSerial = (lineId: string, unitIndex: number, serial: string) => {
+    setLines((prev) => prev.map((l) => {
+      if (l.purchaseItemId !== lineId) return l
+      const newUnits = [...l.units]
+      if (newUnits[unitIndex]) {
+        newUnits[unitIndex] = { ...newUnits[unitIndex], serial }
+      }
+      return { ...l, units: newUnits }
+    }))
   }
 
   const save = async () => {
     if (!activePurchase) return
-    // Validate
     const toReceive = lines.filter((l) => l.receiveQty > 0)
     if (toReceive.length === 0) {
       toast.error('Enter a receive quantity for at least one item')
@@ -109,16 +146,15 @@ export function PurchaseReceivePage() {
         toast.error(`${l.itemName}: receive qty cannot exceed ordered qty (${l.orderedQty})`)
         return
       }
-      // Serial is optional — just warn if count doesn't match
-      if (l.serials) {
-        const sns = l.serials.split(',').map((s) => s.trim()).filter(Boolean)
-        if (sns.length > 0 && sns.length !== l.receiveQty) {
-          if (!confirm(`${l.itemName}: serial count (${sns.length}) doesn't match receive qty (${l.receiveQty}). Continue anyway?`)) {
-            return
-          }
-        }
+      // Check for duplicate serials within this receive
+      const serials = l.units.map((u) => u.serial.trim()).filter(Boolean)
+      const uniqueSerials = new Set(serials)
+      if (uniqueSerials.size !== serials.length) {
+        toast.error(`${l.itemName}: duplicate serial numbers detected. Each serial must be unique.`)
+        return
       }
     }
+
     setSaving(true)
     try {
       const r = await action('create-purchase-receive', activePurchase.id, {
@@ -126,8 +162,8 @@ export function PurchaseReceivePage() {
           purchaseItemId: l.purchaseItemId,
           itemId: l.itemId,
           quantity: l.receiveQty,
-          hasSerial: l.hasSerial,
-          serials: l.serials || null,
+          // Send as array of {barcode, serial} pairs
+          units: l.units.map((u) => ({ barcode: u.barcode, serial: u.serial.trim() || null })),
         })),
         notes,
       })
@@ -137,14 +173,16 @@ export function PurchaseReceivePage() {
       setLines([])
       load()
     } catch (e: any) {
-      toast.error(e.message)
+      let msg = e.message
+      try { const p = JSON.parse(msg); if (p.error) msg = p.error } catch {}
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
   }
 
   const approve = async (id: string) => {
-    if (!confirm('Approve this receive? This will generate item serials and update stock.')) return
+    if (!confirm('Approve this receive? This will create item serials and update stock.')) return
     try {
       await action('approve-purchase-receive', id)
       toast.success('Receive approved. Stock updated.')
@@ -157,7 +195,7 @@ export function PurchaseReceivePage() {
     <div>
       <PageHeader
         title="Purchase Receive"
-        description="Receive stock against approved purchase orders. Barcodes are auto-generated; serials are entered for tracked items. Receives are PENDING until approved."
+        description="Receive stock against approved purchase orders. Auto barcode per unit. Serial numbers from product body (optional). Partial receives allowed."
       />
 
       {/* Approved purchases awaiting receive */}
@@ -192,7 +230,7 @@ export function PurchaseReceivePage() {
                       <TableCell>{new Date(p.purchaseDate).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         {perm.canCreate && (
-                          <Button size="sm" variant="default" className="gap-1" onClick={() => openReceiveForm(p)}>
+                          <Button size="sm" className="gap-1" onClick={() => openReceiveForm(p)}>
                             <PackageCheck className="h-3.5 w-3.5" /> Receive
                           </Button>
                         )}
@@ -285,7 +323,7 @@ export function PurchaseReceivePage() {
           <DialogHeader>
             <DialogTitle>Receive Purchase {activePurchase?.purchaseNo}</DialogTitle>
             <DialogDescription>
-              Enter the quantity being received now (partial receives are allowed). For serial-tracked items, enter one serial per unit. Barcodes are auto-generated for every unit on submit.
+              Enter receive quantity. Each unit gets an auto barcode. Enter serial numbers from product body if available (optional). Partial receives allowed — each receive gets a separate ID.
             </DialogDescription>
           </DialogHeader>
 
@@ -300,49 +338,56 @@ export function PurchaseReceivePage() {
             </div>
           )}
 
-          <div className="border rounded-md overflow-x-auto mt-3">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[180px]">Item</TableHead>
-                  <TableHead className="w-24">Ordered</TableHead>
-                  <TableHead className="w-28">Receive Qty</TableHead>
-                  <TableHead className="min-w-[260px]">Serial Numbers (optional)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lines.map((l) => (
-                  <TableRow key={l.purchaseItemId}>
-                    <TableCell>
-                      <div className="text-sm font-medium">{l.itemName}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode}</div>
-                    </TableCell>
-                    <TableCell className="font-medium">{l.orderedQty}</TableCell>
-                    <TableCell>
+          {lines.map((l) => (
+            <div key={l.purchaseItemId} className="border rounded-md p-3 mt-3">
+              {/* Item header + qty input */}
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-sm font-medium">{l.itemName}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode} · Ordered: {l.orderedQty}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs whitespace-nowrap">Receive Qty:</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={l.orderedQty}
+                    value={l.receiveQty}
+                    onChange={(e) => updateReceiveQty(l.purchaseItemId, Number(e.target.value))}
+                    className="w-20 h-8"
+                    disabled={!perm.canCreate}
+                  />
+                </div>
+              </div>
+
+              {/* Per-unit barcode + serial inputs */}
+              {l.receiveQty > 0 && (
+                <div className="border-t pt-2">
+                  <div className="grid grid-cols-[auto_1fr_1fr] gap-2 text-[10px] font-semibold text-muted-foreground mb-1 px-1">
+                    <div className="w-8 text-center">#</div>
+                    <div>Barcode (auto)</div>
+                    <div>Serial Number (from product body — optional)</div>
+                  </div>
+                  {l.units.map((unit, idx) => (
+                    <div key={idx} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center mb-1">
+                      <div className="w-8 text-center text-xs text-muted-foreground">{idx + 1}</div>
+                      <div className="flex items-center gap-1 bg-slate-50 border rounded px-2 h-8">
+                        <Barcode className="h-3 w-3 text-muted-foreground" />
+                        <span className="font-mono text-xs text-slate-600">{unit.barcode}</span>
+                      </div>
                       <Input
-                        type="number"
-                        min={0}
-                        max={l.orderedQty}
-                        value={l.receiveQty}
-                        onChange={(e) => updateLine(l.purchaseItemId, { receiveQty: Math.min(Number(e.target.value), l.orderedQty) })}
-                        className="w-24"
+                        value={unit.serial}
+                        onChange={(e) => updateUnitSerial(l.purchaseItemId, idx, e.target.value)}
+                        placeholder="Enter serial from product body (leave blank if none)"
+                        className="font-mono text-xs h-8"
                         disabled={!perm.canCreate}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={l.serials}
-                        onChange={(e) => updateLine(l.purchaseItemId, { serials: e.target.value })}
-                        placeholder="SN001, SN002... (optional)"
-                        className="font-mono text-xs"
-                        disabled={!perm.canCreate}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
 
           <div>
             <Label className="text-xs">Notes</Label>
