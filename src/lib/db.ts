@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 import { createClient } from '@libsql/client'
 
 const globalForPrisma = globalThis as unknown as {
@@ -7,8 +7,7 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
-  // Turso / libSQL support — used in production (Vercel) and when env vars are set
-  const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL
+  const tursoUrl = process.env.TURSO_DATABASE_URL
   const tursoToken = process.env.TURSO_AUTH_TOKEN
 
   if (tursoUrl && tursoUrl.startsWith('libsql:') && tursoToken) {
@@ -16,11 +15,11 @@ function createPrismaClient() {
       url: tursoUrl,
       authToken: tursoToken,
     })
-    const adapter = new PrismaLibSQL(libsql)
+    const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoToken })
     return new PrismaClient({ adapter, log: ['error', 'warn'] })
   }
 
-  // Fallback: local SQLite (development)
+  // Fallback: local SQLite
   return new PrismaClient({
     log: process.env.NODE_ENV !== 'production' ? ['query', 'error', 'warn'] : ['error', 'warn'],
   })
