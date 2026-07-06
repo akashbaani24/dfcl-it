@@ -8,6 +8,7 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { Plus, Pencil, Trash2, FolderPlus, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { FormDialog } from '@/components/shared/FormDialog'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 export function CategoriesPage() {
   const perm = usePerm('categories')
   const [cats, setCats] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [openDialog, setOpenDialog] = useState(false)
@@ -45,8 +48,21 @@ export function CategoriesPage() {
 
   useEffect(() => { loadCats() }, [loadCats, refreshKey])
 
-  const topCategories = cats.filter((c) => !c.parentId)
-  const getSubCategories = (parentId: string) => cats.filter((c) => c.parentId === parentId)
+  useEffect(() => {
+    if (!q) { setFiltered(cats); return }
+    const ql = q.toLowerCase()
+    const matching = new Set<string>()
+    for (const c of cats) {
+      if (JSON.stringify(c).toLowerCase().includes(ql)) {
+        matching.add(c.id)
+        if (c.parentId) matching.add(c.parentId)
+      }
+    }
+    setFiltered(cats.filter((c) => matching.has(c.id)))
+  }, [q, cats])
+
+  const topCategories = filtered.filter((c) => !c.parentId)
+  const getSubCategories = (parentId: string) => filtered.filter((c) => c.parentId === parentId)
 
   const toggleExpand = (id: string) => {
     setExpandedParents((prev) => {
@@ -155,7 +171,10 @@ export function CategoriesPage() {
         onAdd={perm.canCreate ? onAdd : undefined}
         addLabel="Add Category"
       />
-      <ExportButtons module="categories" title="Categories" rows={exportRows} columns={exportColumns} />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search categories..." />
+        <ExportButtons module="categories" title="Categories" rows={exportRows} columns={exportColumns} />
+      </div>
 
       {loading ? (
         <Card><CardContent className="p-4 space-y-3">
@@ -191,7 +210,7 @@ export function CategoriesPage() {
                   {topCategories.map((cat) => {
                     serial++
                     const subs = getSubCategories(cat.id)
-                    const isExpanded = expandedParents.has(cat.id)
+                    const isExpanded = q ? true : expandedParents.has(cat.id)
                     return (
                       <>
                         {/* Parent category row */}

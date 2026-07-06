@@ -1,21 +1,29 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { report } from '@/lib/api'
 import { Barcode, ScanLine } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function ReportsStockPage() {
   const perm = usePerm('reports-stock')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!perm.canView) return
     report('stock-summary').then((r) => setRows(r)).catch(() => {}).finally(() => setLoading(false))
   }, [perm.canView])
+
+  const filtered = useMemo(() => {
+    if (!q) return rows
+    const ql = q.toLowerCase()
+    return rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql))
+  }, [q, rows])
 
   if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
 
@@ -41,10 +49,13 @@ export function ReportsStockPage() {
   return (
     <div>
       <PageHeader title="Stock Report" description="Stock balance across all entities" />
-      <ExportButtons module="reports-stock" title="Stock Report" rows={exportRows} columns={exportColumns} />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search stock..." />
+        <ExportButtons module="reports-stock" title="Stock Report" rows={exportRows} columns={exportColumns} />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No stock data" />
       ) : (
         <Card>
@@ -63,7 +74,7 @@ export function ReportsStockPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r, i) => (
+                  {filtered.map((r, i) => (
                     <TableRow key={i}>
                       <TableCell>{r.entity?.name} ({r.entity?.shortCode})</TableCell>
                       <TableCell className="font-mono text-xs">{r.item?.itemCode}</TableCell>

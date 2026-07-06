@@ -1,20 +1,29 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { report } from '@/lib/api'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function ReportsAccountsPage() {
   const perm = usePerm('reports-accounts')
   const [data, setData] = useState<any>(null)
+  const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!perm.canView) return
     report('accounts-summary').then((r) => setData(r)).catch(() => {}).finally(() => setLoading(false))
   }, [perm.canView])
+
+  const filtered = useMemo(() => {
+    const entries = data?.entries || []
+    if (!q) return entries
+    const ql = q.toLowerCase()
+    return entries.filter((e: any) => JSON.stringify(e).toLowerCase().includes(ql))
+  }, [q, data])
 
   if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
   if (loading) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
@@ -44,7 +53,10 @@ export function ReportsAccountsPage() {
   return (
     <div>
       <PageHeader title="Accounts Report" description="Daily expenses & receive summary" />
-      <ExportButtons module="reports-accounts" title="Accounts Report" rows={exportRows} columns={exportColumns} />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search entries..." />
+        <ExportButtons module="reports-accounts" title="Accounts Report" rows={exportRows} columns={exportColumns} />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Expense</div><div className="text-2xl font-bold text-rose-600">৳{data.totalExpense.toFixed(2)}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Receive</div><div className="text-2xl font-bold text-emerald-600">৳{data.totalReceive.toFixed(2)}</div></CardContent></Card>
@@ -92,7 +104,7 @@ export function ReportsAccountsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.entries?.map((e: any) => (
+                {filtered.map((e: any) => (
                   <TableRow key={e.id}>
                     <TableCell className="font-mono text-xs">{e.entryNo}</TableCell>
                     <TableCell>{new Date(e.date).toLocaleDateString()}</TableCell>

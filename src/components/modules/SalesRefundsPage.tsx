@@ -13,10 +13,13 @@ import { list, create } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function SalesRefundsPage() {
   const perm = usePerm('sales-refunds')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [sales, setSales] = useState<any[]>([])
   const [returns, setReturns] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +36,12 @@ export function SalesRefundsPage() {
     } finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({ salesId: '', returnId: '', amount: 0, method: 'CASH', refundDate: new Date().toISOString().slice(0, 10), notes: '' })
@@ -64,29 +73,32 @@ export function SalesRefundsPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Refund"
       />
-      <ExportButtons
-        module="sales-refunds"
-        title="Sales Refunds"
-        rows={rows.map((r) => ({
-          refundNo: r.refundNo,
-          sales: r.sales?.salesNo,
-          date: new Date(r.refundDate).toLocaleDateString(),
-          amount: r.amount,
-          method: r.method,
-          notes: r.notes,
-        }))}
-        columns={[
-          { key: 'refundNo', label: 'Refund No' },
-          { key: 'sales', label: 'Sales' },
-          { key: 'date', label: 'Date' },
-          { key: 'amount', label: 'Amount' },
-          { key: 'method', label: 'Method' },
-          { key: 'notes', label: 'Notes' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search refunds..." />
+        <ExportButtons
+          module="sales-refunds"
+          title="Sales Refunds"
+          rows={rows.map((r) => ({
+            refundNo: r.refundNo,
+            sales: r.sales?.salesNo,
+            date: new Date(r.refundDate).toLocaleDateString(),
+            amount: r.amount,
+            method: r.method,
+            notes: r.notes,
+          }))}
+          columns={[
+            { key: 'refundNo', label: 'Refund No' },
+            { key: 'sales', label: 'Sales' },
+            { key: 'date', label: 'Date' },
+            { key: 'amount', label: 'Amount' },
+            { key: 'method', label: 'Method' },
+            { key: 'notes', label: 'Notes' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No refunds" />
       ) : (
         <Card>
@@ -103,7 +115,7 @@ export function SalesRefundsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.refundNo}</TableCell>
                     <TableCell className="font-mono text-sm">{r.sales?.salesNo}</TableCell>

@@ -12,12 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { list, create, action } from '@/lib/api'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 import { toast } from 'sonner'
 import { CheckCircle2, XCircle, Eye } from 'lucide-react'
 
 export function PurchaseRequisitionsPage() {
   const perm = usePerm('purchase-requisitions')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +43,12 @@ export function PurchaseRequisitionsPage() {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({ entityId: '', requestedBy: '', requiredDate: '', notes: '' })
@@ -95,29 +104,32 @@ export function PurchaseRequisitionsPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Requisition"
       />
-      <ExportButtons
-        module="purchase-requisitions"
-        title="Purchase Requisitions"
-        rows={rows.map((r) => ({
-          reqNo: r.reqNo,
-          date: new Date(r.requestDate).toLocaleDateString(),
-          entity: r.entity?.name,
-          requestedBy: r.requestedBy,
-          items: r.items?.length || 0,
-          status: r.status,
-        }))}
-        columns={[
-          { key: 'reqNo', label: 'Req No' },
-          { key: 'date', label: 'Date' },
-          { key: 'entity', label: 'Entity' },
-          { key: 'requestedBy', label: 'Requested By' },
-          { key: 'items', label: 'Items' },
-          { key: 'status', label: 'Status' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search requisitions..." />
+        <ExportButtons
+          module="purchase-requisitions"
+          title="Purchase Requisitions"
+          rows={rows.map((r) => ({
+            reqNo: r.reqNo,
+            date: new Date(r.requestDate).toLocaleDateString(),
+            entity: r.entity?.name,
+            requestedBy: r.requestedBy,
+            items: r.items?.length || 0,
+            status: r.status,
+          }))}
+          columns={[
+            { key: 'reqNo', label: 'Req No' },
+            { key: 'date', label: 'Date' },
+            { key: 'entity', label: 'Entity' },
+            { key: 'requestedBy', label: 'Requested By' },
+            { key: 'items', label: 'Items' },
+            { key: 'status', label: 'Status' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No requisitions yet" hint="Create one to start" />
       ) : (
         <Card>
@@ -135,7 +147,7 @@ export function PurchaseRequisitionsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r) => (
+                  {filtered.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-mono text-sm">{r.reqNo}</TableCell>
                       <TableCell>{new Date(r.requestDate).toLocaleDateString()}</TableCell>

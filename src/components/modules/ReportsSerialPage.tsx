@@ -5,9 +5,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { report } from '@/lib/api'
 import { ScanLine } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function ReportsSerialPage() {
   const perm = usePerm('reports-serial')
@@ -59,7 +59,7 @@ export function ReportsSerialPage() {
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <div>
           <Label className="text-xs">Search</Label>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Serial / Item / Barcode" className="w-64 mt-1" />
+          <SearchInput value={q} onChange={setQ} placeholder="Serial / Item / Barcode" />
         </div>
         <div>
           <Label className="text-xs">Status Filter</Label>

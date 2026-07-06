@@ -14,10 +14,13 @@ import { toast } from 'sonner'
 import { Eye, Undo2 } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function PurchaseReturnsPage() {
   const perm = usePerm('purchase-returns')
   const [returns, setReturns] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [purchases, setPurchases] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [open, setOpen] = useState(false)
@@ -39,6 +42,12 @@ export function PurchaseReturnsPage() {
     load()
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(returns); return }
+    const ql = q.toLowerCase()
+    setFiltered(returns.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, returns])
 
   const startNew = () => {
     setForm({ purchaseId: '', reason: '', returnDate: new Date().toISOString().slice(0, 10) })
@@ -90,27 +99,30 @@ export function PurchaseReturnsPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Return"
       />
-      <ExportButtons
-        module="purchase-returns"
-        title="Purchase Returns"
-        rows={returns.map((r) => ({
-          returnNo: r.returnNo,
-          purchase: r.purchase?.purchaseNo,
-          date: new Date(r.returnDate).toLocaleDateString(),
-          reason: r.reason,
-          total: r.totalAmount,
-        }))}
-        columns={[
-          { key: 'returnNo', label: 'Return No' },
-          { key: 'purchase', label: 'Purchase' },
-          { key: 'date', label: 'Date' },
-          { key: 'reason', label: 'Reason' },
-          { key: 'total', label: 'Total' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search returns..." />
+        <ExportButtons
+          module="purchase-returns"
+          title="Purchase Returns"
+          rows={returns.map((r) => ({
+            returnNo: r.returnNo,
+            purchase: r.purchase?.purchaseNo,
+            date: new Date(r.returnDate).toLocaleDateString(),
+            reason: r.reason,
+            total: r.totalAmount,
+          }))}
+          columns={[
+            { key: 'returnNo', label: 'Return No' },
+            { key: 'purchase', label: 'Purchase' },
+            { key: 'date', label: 'Date' },
+            { key: 'reason', label: 'Reason' },
+            { key: 'total', label: 'Total' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : returns.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No returns" hint="Create a return when needed" />
       ) : (
         <Card>
@@ -127,7 +139,7 @@ export function PurchaseReturnsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {returns.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.returnNo}</TableCell>
                     <TableCell className="font-mono text-sm">{r.purchase?.purchaseNo}</TableCell>

@@ -14,10 +14,13 @@ import { toast } from 'sonner'
 import { Eye, CheckCircle2, XCircle } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function AdjustmentsPage() {
   const perm = usePerm('adjustments')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +40,12 @@ export function AdjustmentsPage() {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({ entityId: '', type: 'INCREASE', adjustDate: new Date().toISOString().slice(0, 10), reason: '' })
@@ -87,29 +96,32 @@ export function AdjustmentsPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Adjustment"
       />
-      <ExportButtons
-        module="adjustments"
-        title="Stock Adjustments"
-        rows={rows.map((r) => ({
-          adjustNo: r.adjustNo,
-          entity: r.entity?.name,
-          type: r.type,
-          date: new Date(r.adjustDate).toLocaleDateString(),
-          reason: r.reason,
-          status: r.status,
-        }))}
-        columns={[
-          { key: 'adjustNo', label: 'Adjust No' },
-          { key: 'entity', label: 'Entity' },
-          { key: 'type', label: 'Type' },
-          { key: 'date', label: 'Date' },
-          { key: 'reason', label: 'Reason' },
-          { key: 'status', label: 'Status' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search adjustments..." />
+        <ExportButtons
+          module="adjustments"
+          title="Stock Adjustments"
+          rows={rows.map((r) => ({
+            adjustNo: r.adjustNo,
+            entity: r.entity?.name,
+            type: r.type,
+            date: new Date(r.adjustDate).toLocaleDateString(),
+            reason: r.reason,
+            status: r.status,
+          }))}
+          columns={[
+            { key: 'adjustNo', label: 'Adjust No' },
+            { key: 'entity', label: 'Entity' },
+            { key: 'type', label: 'Type' },
+            { key: 'date', label: 'Date' },
+            { key: 'reason', label: 'Reason' },
+            { key: 'status', label: 'Status' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No adjustments" />
       ) : (
         <Card>
@@ -127,7 +139,7 @@ export function AdjustmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.adjustNo}</TableCell>
                     <TableCell>{r.entity?.name}</TableCell>

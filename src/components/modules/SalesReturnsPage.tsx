@@ -14,10 +14,13 @@ import { Eye, RotateCcw } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function SalesReturnsPage() {
   const perm = usePerm('sales-returns')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [sales, setSales] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +42,12 @@ export function SalesReturnsPage() {
     load()
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({ salesId: '', reason: '', returnDate: new Date().toISOString().slice(0, 10) })
@@ -89,27 +98,30 @@ export function SalesReturnsPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Return"
       />
-      <ExportButtons
-        module="sales-returns"
-        title="Sales Returns"
-        rows={rows.map((r) => ({
-          returnNo: r.returnNo,
-          sales: r.sales?.salesNo,
-          date: new Date(r.returnDate).toLocaleDateString(),
-          reason: r.reason,
-          total: r.totalAmount,
-        }))}
-        columns={[
-          { key: 'returnNo', label: 'Return No' },
-          { key: 'sales', label: 'Sales' },
-          { key: 'date', label: 'Date' },
-          { key: 'reason', label: 'Reason' },
-          { key: 'total', label: 'Total' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search returns..." />
+        <ExportButtons
+          module="sales-returns"
+          title="Sales Returns"
+          rows={rows.map((r) => ({
+            returnNo: r.returnNo,
+            sales: r.sales?.salesNo,
+            date: new Date(r.returnDate).toLocaleDateString(),
+            reason: r.reason,
+            total: r.totalAmount,
+          }))}
+          columns={[
+            { key: 'returnNo', label: 'Return No' },
+            { key: 'sales', label: 'Sales' },
+            { key: 'date', label: 'Date' },
+            { key: 'reason', label: 'Reason' },
+            { key: 'total', label: 'Total' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No returns" />
       ) : (
         <Card>
@@ -126,7 +138,7 @@ export function SalesReturnsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.returnNo}</TableCell>
                     <TableCell className="font-mono text-sm">{r.sales?.salesNo}</TableCell>

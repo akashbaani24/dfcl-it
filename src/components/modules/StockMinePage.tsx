@@ -10,10 +10,13 @@ import { stockView, list } from '@/lib/api'
 import { ScanLine, Barcode, MapPin } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function StockMinePage() {
   const perm = usePerm('stock-mine')
   const [data, setData] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [entityId, setEntityId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -31,32 +34,41 @@ export function StockMinePage() {
   }
   useEffect(() => { if (entityId) load() }, [entityId])
 
+  useEffect(() => {
+    if (!q) { setFiltered(data); return }
+    const ql = q.toLowerCase()
+    setFiltered(data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, data])
+
   return (
     <div>
       <PageHeader
         title="My Entity Stock"
         description="Stock currently held by a specific entity (branch/showroom/warehouse)"
       />
-      <ExportButtons
-        module="stock-mine"
-        title="My Entity Stock"
-        rows={data.filter((r) => r.balance > 0).map((r) => ({
-          itemCode: r.item?.itemCode,
-          barcode: r.item?.barcode,
-          name: r.item?.name,
-          category: r.item?.category?.name,
-          balance: r.balance,
-          serials: r.item?.hasSerial ? (r.serials?.length || 0) : '—',
-        }))}
-        columns={[
-          { key: 'itemCode', label: 'Item Code' },
-          { key: 'barcode', label: 'Barcode' },
-          { key: 'name', label: 'Item Name' },
-          { key: 'category', label: 'Category' },
-          { key: 'balance', label: 'Balance' },
-          { key: 'serials', label: 'Serials In Stock' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search stock..." />
+        <ExportButtons
+          module="stock-mine"
+          title="My Entity Stock"
+          rows={data.filter((r) => r.balance > 0).map((r) => ({
+            itemCode: r.item?.itemCode,
+            barcode: r.item?.barcode,
+            name: r.item?.name,
+            category: r.item?.category?.name,
+            balance: r.balance,
+            serials: r.item?.hasSerial ? (r.serials?.length || 0) : '—',
+          }))}
+          columns={[
+            { key: 'itemCode', label: 'Item Code' },
+            { key: 'barcode', label: 'Barcode' },
+            { key: 'name', label: 'Item Name' },
+            { key: 'category', label: 'Category' },
+            { key: 'balance', label: 'Balance' },
+            { key: 'serials', label: 'Serials In Stock' },
+          ]}
+        />
+      </div>
       <div className="mb-3 flex items-end gap-3">
         <div>
           <Label className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" /> Select Your Entity</Label>
@@ -74,7 +86,7 @@ export function StockMinePage() {
         <EmptyState title="Select an entity" hint="Choose your entity to see its stock" />
       ) : loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : data.filter((r) => r.balance > 0).length === 0 ? (
+      ) : filtered.filter((r) => r.balance > 0).length === 0 ? (
         <EmptyState title="No stock at this entity" />
       ) : (
         <Card>
@@ -93,7 +105,7 @@ export function StockMinePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.filter((r) => r.balance > 0).map((r) => (
+                  {filtered.filter((r) => r.balance > 0).map((r) => (
                     <TableRow key={r.item.id}>
                       <TableCell className="font-mono text-xs">{r.item.itemCode}</TableCell>
                       <TableCell className="font-mono text-xs"><Barcode className="h-3 w-3 inline mr-1" />{r.item.barcode}</TableCell>

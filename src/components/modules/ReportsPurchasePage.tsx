@@ -1,14 +1,16 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { report } from '@/lib/api'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function ReportsPurchasePage() {
   const perm = usePerm('reports-purchase')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
 
@@ -19,6 +21,12 @@ export function ReportsPurchasePage() {
       setTotal(r.reduce((s: number, x: any) => s + (x.total || 0), 0))
     }).catch(() => {}).finally(() => setLoading(false))
   }, [perm.canView])
+
+  const filtered = useMemo(() => {
+    if (!q) return rows
+    const ql = q.toLowerCase()
+    return rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql))
+  }, [q, rows])
 
   if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
 
@@ -44,7 +52,10 @@ export function ReportsPurchasePage() {
   return (
     <div>
       <PageHeader title="Purchase Report" description="All purchases with totals" />
-      <ExportButtons module="reports-purchase" title="Purchase Report" rows={exportRows} columns={exportColumns} />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search purchases..." />
+        <ExportButtons module="reports-purchase" title="Purchase Report" rows={exportRows} columns={exportColumns} />
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Purchases</div><div className="text-2xl font-bold">{rows.length}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Amount</div><div className="text-2xl font-bold">৳{total.toFixed(2)}</div></CardContent></Card>
@@ -53,7 +64,7 @@ export function ReportsPurchasePage() {
       </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No purchases" />
       ) : (
         <Card>
@@ -71,7 +82,7 @@ export function ReportsPurchasePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r, i) => (
+                {filtered.map((r, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono text-sm">{r.purchaseNo}</TableCell>
                     <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>

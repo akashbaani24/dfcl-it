@@ -14,10 +14,13 @@ import { toast } from 'sonner'
 import { Eye, CheckCircle2 } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function InternalTransfersPage() {
   const perm = usePerm('internal-transfers')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +40,12 @@ export function InternalTransfersPage() {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({ fromEntityId: '', toEntityId: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })
@@ -81,27 +90,30 @@ export function InternalTransfersPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Transfer"
       />
-      <ExportButtons
-        module="internal-transfers"
-        title="Internal Transfers"
-        rows={rows.map((r) => ({
-          transferNo: r.transferNo,
-          date: new Date(r.transferDate).toLocaleDateString(),
-          from: r.fromEntity?.name,
-          to: r.toEntity?.name,
-          status: r.status,
-        }))}
-        columns={[
-          { key: 'transferNo', label: 'Transfer No' },
-          { key: 'date', label: 'Date' },
-          { key: 'from', label: 'From' },
-          { key: 'to', label: 'To' },
-          { key: 'status', label: 'Status' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search transfers..." />
+        <ExportButtons
+          module="internal-transfers"
+          title="Internal Transfers"
+          rows={rows.map((r) => ({
+            transferNo: r.transferNo,
+            date: new Date(r.transferDate).toLocaleDateString(),
+            from: r.fromEntity?.name,
+            to: r.toEntity?.name,
+            status: r.status,
+          }))}
+          columns={[
+            { key: 'transferNo', label: 'Transfer No' },
+            { key: 'date', label: 'Date' },
+            { key: 'from', label: 'From' },
+            { key: 'to', label: 'To' },
+            { key: 'status', label: 'Status' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No transfers" />
       ) : (
         <Card>
@@ -118,7 +130,7 @@ export function InternalTransfersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.transferNo}</TableCell>
                     <TableCell>{r.fromEntity?.name}</TableCell>

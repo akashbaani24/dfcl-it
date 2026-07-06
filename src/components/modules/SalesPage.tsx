@@ -14,10 +14,13 @@ import { toast } from 'sonner'
 import { Eye, PackageCheck, ScanLine } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function SalesPage() {
   const perm = usePerm('sales')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +43,12 @@ export function SalesPage() {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
     list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const startNew = () => {
     setForm({
@@ -92,35 +101,38 @@ export function SalesPage() {
         onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Sale"
       />
-      <ExportButtons
-        module="sales"
-        title="Sales Orders"
-        rows={rows.map((r) => ({
-          salesNo: r.salesNo,
-          date: new Date(r.salesDate).toLocaleDateString(),
-          entity: r.entity?.name,
-          customer: r.customerName,
-          phone: r.customerPhone,
-          total: r.totalAmount,
-          paid: r.paidAmount,
-          status: r.status,
-          delivery: r.deliveryStatus,
-        }))}
-        columns={[
-          { key: 'salesNo', label: 'Sales No' },
-          { key: 'date', label: 'Date' },
-          { key: 'entity', label: 'Entity' },
-          { key: 'customer', label: 'Customer' },
-          { key: 'phone', label: 'Phone' },
-          { key: 'total', label: 'Total' },
-          { key: 'paid', label: 'Paid' },
-          { key: 'status', label: 'Status' },
-          { key: 'delivery', label: 'Delivery' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search sales..." />
+        <ExportButtons
+          module="sales"
+          title="Sales Orders"
+          rows={rows.map((r) => ({
+            salesNo: r.salesNo,
+            date: new Date(r.salesDate).toLocaleDateString(),
+            entity: r.entity?.name,
+            customer: r.customerName,
+            phone: r.customerPhone,
+            total: r.totalAmount,
+            paid: r.paidAmount,
+            status: r.status,
+            delivery: r.deliveryStatus,
+          }))}
+          columns={[
+            { key: 'salesNo', label: 'Sales No' },
+            { key: 'date', label: 'Date' },
+            { key: 'entity', label: 'Entity' },
+            { key: 'customer', label: 'Customer' },
+            { key: 'phone', label: 'Phone' },
+            { key: 'total', label: 'Total' },
+            { key: 'paid', label: 'Paid' },
+            { key: 'status', label: 'Status' },
+            { key: 'delivery', label: 'Delivery' },
+          ]}
+        />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No sales yet" />
       ) : (
         <Card>
@@ -139,7 +151,7 @@ export function SalesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.salesNo}</TableCell>
                     <TableCell>{new Date(r.salesDate).toLocaleDateString()}</TableCell>

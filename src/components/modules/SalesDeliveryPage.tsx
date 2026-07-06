@@ -9,10 +9,13 @@ import { list, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, PackageCheck } from 'lucide-react'
 import { usePerm } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function SalesDeliveryPage() {
   const perm = usePerm('sales-delivery')
   const [rows, setRows] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [viewing, setViewing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -25,6 +28,12 @@ export function SalesDeliveryPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!q) { setFiltered(rows); return }
+    const ql = q.toLowerCase()
+    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, rows])
 
   const deliver = async (id: string) => {
     if (!confirm('Mark as delivered? Item serials will be marked SOLD and stock reduced.')) return
@@ -42,9 +51,12 @@ export function SalesDeliveryPage() {
         title="Sales Order Delivery"
         description="Pending deliveries. Mark delivered once products are physically handed over."
       />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search deliveries..." />
+      </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : rows.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState title="No pending deliveries" hint="All sales are delivered" />
       ) : (
         <Card>
@@ -62,7 +74,7 @@ export function SalesDeliveryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-sm">{r.salesNo}</TableCell>
                     <TableCell>{new Date(r.salesDate).toLocaleDateString()}</TableCell>

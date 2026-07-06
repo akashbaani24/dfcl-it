@@ -11,10 +11,13 @@ import { ScanLine, Barcode } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/shared/PageHeader'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 export function StockAllPage() {
   const perm = usePerm('stock-all')
   const [data, setData] = useState<any[]>([])
+  const [q, setQ] = useState('')
+  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [entityId, setEntityId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -30,34 +33,43 @@ export function StockAllPage() {
   useEffect(() => { list('entities').then((r) => setEntities(r as any[])).catch(() => {}) }, [])
   useEffect(() => { load() }, [entityId])
 
+  useEffect(() => {
+    if (!q) { setFiltered(data); return }
+    const ql = q.toLowerCase()
+    setFiltered(data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+  }, [q, data])
+
   return (
     <div>
       <PageHeader
         title="All Entity Stock"
         description="Aggregated stock view across all entities or filter by entity"
       />
-      <ExportButtons
-        module="stock-all"
-        title="Stock Summary"
-        rows={data.filter((r) => r.balance > 0).map((r) => ({
-          itemCode: r.item?.itemCode,
-          barcode: r.item?.barcode,
-          name: r.item?.name,
-          category: r.item?.category?.parent?.name ? r.item.category.parent.name + ' → ' + r.item.category.name : r.item?.category?.name,
-          uom: r.item?.uom?.shortCode,
-          balance: r.balance,
-          serialTracking: r.item?.hasSerial ? 'Yes' : 'No',
-        }))}
-        columns={[
-          { key: 'itemCode', label: 'Item Code' },
-          { key: 'barcode', label: 'Barcode' },
-          { key: 'name', label: 'Item Name' },
-          { key: 'category', label: 'Category' },
-          { key: 'uom', label: 'UoM' },
-          { key: 'balance', label: 'Balance' },
-          { key: 'serialTracking', label: 'Serial Tracking' },
-        ]}
-      />
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search stock..." />
+        <ExportButtons
+          module="stock-all"
+          title="Stock Summary"
+          rows={data.filter((r) => r.balance > 0).map((r) => ({
+            itemCode: r.item?.itemCode,
+            barcode: r.item?.barcode,
+            name: r.item?.name,
+            category: r.item?.category?.parent?.name ? r.item.category.parent.name + ' → ' + r.item.category.name : r.item?.category?.name,
+            uom: r.item?.uom?.shortCode,
+            balance: r.balance,
+            serialTracking: r.item?.hasSerial ? 'Yes' : 'No',
+          }))}
+          columns={[
+            { key: 'itemCode', label: 'Item Code' },
+            { key: 'barcode', label: 'Barcode' },
+            { key: 'name', label: 'Item Name' },
+            { key: 'category', label: 'Category' },
+            { key: 'uom', label: 'UoM' },
+            { key: 'balance', label: 'Balance' },
+            { key: 'serialTracking', label: 'Serial Tracking' },
+          ]}
+        />
+      </div>
       <div className="mb-3 flex items-end gap-3">
         <div>
           <Label className="text-xs">Entity</Label>
@@ -74,7 +86,7 @@ export function StockAllPage() {
 
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : data.length === 0 ? (
+      ) : filtered.filter((r) => r.balance > 0).length === 0 ? (
         <EmptyState title="No stock" hint="No items in stock" />
       ) : (
         <Card>
@@ -94,7 +106,7 @@ export function StockAllPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.filter((r) => r.balance > 0).map((r) => (
+                  {filtered.filter((r) => r.balance > 0).map((r) => (
                     <TableRow key={r.item.id}>
                       <TableCell className="font-mono text-xs">{r.item.itemCode}</TableCell>
                       <TableCell className="font-mono text-xs"><Barcode className="h-3 w-3 inline mr-1" />{r.item.barcode}</TableCell>
