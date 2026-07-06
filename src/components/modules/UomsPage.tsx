@@ -1,6 +1,7 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
 import { FormDialog, FieldDef } from '@/components/shared/FormDialog'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'name', label: 'Unit Name' },
@@ -12,7 +13,11 @@ const fields: FieldDef[] = [
   { name: 'shortCode', label: 'Short Code', required: true, placeholder: 'e.g. PCS' },
   { name: 'isActive', label: 'Active', type: 'switch', default: true },
 ]
+
+const navConfig = { slug: 'uoms', title: 'UoM', fields, backTo: 'uoms' as const }
+
 export function UomsPage() {
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
   return (
     <ResourcePage
       slug="uoms"
@@ -21,6 +26,8 @@ export function UomsPage() {
       fields={fields}
       columns={columns}
       addLabel="Add UoM"
+      onCustomAdd={() => navigateToAdd(navConfig)}
+      onCustomEdit={(row) => navigateToEdit(row.id, navConfig)}
     />
   )
 }

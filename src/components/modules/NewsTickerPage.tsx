@@ -1,6 +1,7 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
 import { FormDialog, FieldDef } from '@/components/shared/FormDialog'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'sortOrder', label: 'Order' },
@@ -12,7 +13,11 @@ const fields: FieldDef[] = [
   { name: 'sortOrder', label: 'Sort Order', type: 'number', default: 1 },
   { name: 'isActive', label: 'Active', type: 'switch', default: true },
 ]
+
+const navConfig = { slug: 'news-ticker', title: 'News Ticker', fields, backTo: 'news-ticker' as const }
+
 export function NewsTickerPage() {
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
   return (
     <ResourcePage
       slug="news-ticker"
@@ -21,6 +26,8 @@ export function NewsTickerPage() {
       fields={fields}
       columns={columns}
       addLabel="Add Ticker"
+      onCustomAdd={() => navigateToAdd(navConfig)}
+      onCustomEdit={(row) => navigateToEdit(row.id, navConfig)}
     />
   )
 }

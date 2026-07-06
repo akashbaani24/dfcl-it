@@ -1,6 +1,7 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
 import { FieldDef } from '@/components/shared/FormDialog'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'name', label: 'Type Name' },
@@ -24,7 +25,10 @@ const fields: FieldDef[] = [
   { name: 'isActive', label: 'Active', type: 'switch', default: true },
 ]
 
+const navConfig = { slug: 'account-types', title: 'Account Type', fields, backTo: 'account-types' as const }
+
 export function AccountTypesPage() {
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
   return (
     <ResourcePage
       slug="account-types"
@@ -33,6 +37,8 @@ export function AccountTypesPage() {
       fields={fields}
       columns={columns}
       addLabel="Add Type"
+      onCustomAdd={() => navigateToAdd(navConfig)}
+      onCustomEdit={(row) => navigateToEdit(row.id, navConfig)}
     />
   )
 }

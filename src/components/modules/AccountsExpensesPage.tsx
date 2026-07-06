@@ -4,6 +4,7 @@ import { FieldDef } from '@/components/shared/FormDialog'
 import { Badge } from '@/components/shared/PageHeader'
 import { useEffect, useState } from 'react'
 import { list } from '@/lib/api'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'entryNo', label: 'Entry No' },
@@ -18,6 +19,7 @@ const columns: Col[] = [
 export function AccountsExpensesPage() {
   const [entities, setEntities] = useState<any[]>([])
   const [expenseTypes, setExpenseTypes] = useState<any[]>([])
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
 
   useEffect(() => {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
@@ -47,6 +49,16 @@ export function AccountsExpensesPage() {
     { name: 'description', label: 'Description', type: 'textarea', full: true },
   ]
 
+  // Build nav config inside component so dynamic select options (entities, expense types)
+  // are captured fresh from current state when Add/Edit is clicked.
+  const buildNavConfig = () => ({
+    slug: 'account-entries',
+    title: 'Expense',
+    fields,
+    defaultValues: { type: 'EXPENSE' },
+    backTo: 'accounts-expenses' as const,
+  })
+
   return (
     <ResourcePage
       slug="account-entries"
@@ -58,6 +70,8 @@ export function AccountsExpensesPage() {
       filter={{ type: 'EXPENSE' }}
       defaultValues={{ type: 'EXPENSE' }}
       moduleKey="accounts-expenses"
+      onCustomAdd={() => navigateToAdd(buildNavConfig())}
+      onCustomEdit={(row) => navigateToEdit(row.id, buildNavConfig())}
     />
   )
 }

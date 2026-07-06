@@ -4,6 +4,7 @@ import { FieldDef } from '@/components/shared/FormDialog'
 import { Badge } from '@/components/shared/PageHeader'
 import { useEffect, useState } from 'react'
 import { list } from '@/lib/api'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'entryNo', label: 'Entry No' },
@@ -18,6 +19,7 @@ const columns: Col[] = [
 export function AccountsReceivePage() {
   const [entities, setEntities] = useState<any[]>([])
   const [receiveTypes, setReceiveTypes] = useState<any[]>([])
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
 
   useEffect(() => {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
@@ -47,6 +49,16 @@ export function AccountsReceivePage() {
     { name: 'description', label: 'Description', type: 'textarea', full: true },
   ]
 
+  // Build nav config inside component so dynamic select options (entities, receive types)
+  // are captured fresh from current state when Add/Edit is clicked.
+  const buildNavConfig = () => ({
+    slug: 'account-entries',
+    title: 'Receive',
+    fields,
+    defaultValues: { type: 'RECEIVE' },
+    backTo: 'accounts-receive' as const,
+  })
+
   return (
     <ResourcePage
       slug="account-entries"
@@ -58,6 +70,8 @@ export function AccountsReceivePage() {
       filter={{ type: 'RECEIVE' }}
       defaultValues={{ type: 'RECEIVE' }}
       moduleKey="accounts-receive"
+      onCustomAdd={() => navigateToAdd(buildNavConfig())}
+      onCustomEdit={(row) => navigateToEdit(row.id, buildNavConfig())}
     />
   )
 }

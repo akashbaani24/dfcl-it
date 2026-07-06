@@ -3,6 +3,7 @@ import { ResourcePage, Col } from '@/components/shared/ResourcePage'
 import { FieldDef } from '@/components/shared/FormDialog'
 import { useEffect, useState, useCallback } from 'react'
 import { list } from '@/lib/api'
+import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
 
 const columns: Col[] = [
   { key: 'name', label: 'Entity Name' },
@@ -17,6 +18,7 @@ const columns: Col[] = [
 export function EntitiesPage() {
   const [entities, setEntities] = useState<any[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
+  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
 
   const loadEntities = useCallback(() => {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
@@ -39,6 +41,10 @@ export function EntitiesPage() {
     { name: 'isActive', label: 'Active', type: 'switch', default: true },
   ]
 
+  // Build nav config inside component so dynamic select options (e.g. parent entities)
+  // are captured fresh from current state when Add/Edit is clicked.
+  const buildNavConfig = () => ({ slug: 'entities', title: 'Entity', fields, backTo: 'entities' as const })
+
   return (
     <ResourcePage
       slug="entities"
@@ -49,6 +55,8 @@ export function EntitiesPage() {
       addLabel="Add Entity"
       onDataChange={() => setRefreshKey((k) => k + 1)}
       deleteWarning="⚠️ এই Entity delete করা হবে। যদি এর অধীনে কোনো লেনদেনকৃত ডাটা (departments, employees, suppliers, stock, purchases, sales ইত্যাদি) থাকে, তবে delete হবে না এবং inactive করতে বলা হবে।"
+      onCustomAdd={() => navigateToAdd(buildNavConfig())}
+      onCustomEdit={(row) => navigateToEdit(row.id, buildNavConfig())}
     />
   )
 }

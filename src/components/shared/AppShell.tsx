@@ -46,6 +46,7 @@ import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
 import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
 import { ItemEditPage } from '@/components/modules/ItemEditPage'
 import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
+import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
@@ -249,6 +250,32 @@ function ModuleRouter({ active }: { active: any }) {
     case 'login-settings': return <LoginSettingsPage />
     case 'item-edit': return <ItemEditPage />
     case 'account-types': return <AccountTypesPage />
+    case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
   }
+}
+
+// Wrapper that reads config from sessionStorage and renders GenericAddEditPage
+function GenericAddEditPageWrapper() {
+  const config = typeof window !== 'undefined' ? sessionStorage.getItem('genericAddEditConfig') : null
+  if (!config) return <div className="p-6 text-sm text-muted-foreground">No config found. Go back.</div>
+  // Parse config outside of any JSX construction so render-time errors are not
+  // swallowed by a try/catch (which would violate react-hooks/error-boundaries).
+  let parsed: { slug: string; title: string; fields: any[]; defaultValues?: Record<string, any>; backTo: any } | null = null
+  try {
+    parsed = JSON.parse(config)
+  } catch {
+    return <div className="p-6 text-sm text-muted-foreground">Invalid config.</div>
+  }
+  if (!parsed) return <div className="p-6 text-sm text-muted-foreground">Invalid config.</div>
+  const { slug, title, fields, defaultValues, backTo } = parsed
+  return (
+    <GenericAddEditPage
+      slug={slug}
+      title={title}
+      fields={fields}
+      defaultValues={defaultValues}
+      backTo={backTo}
+    />
+  )
 }
