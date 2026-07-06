@@ -4,13 +4,14 @@ import { useAuth } from '@/lib/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Lock, User, Boxes, MessageCircle, Phone } from 'lucide-react'
+import { Loader2, Lock, User, Boxes, MessageCircle, Phone, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function LoginPage() {
   const { setAuth } = useAuth()
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
@@ -38,169 +39,189 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#0a0a1a] flex flex-col">
-      {/* Animated gradient blobs */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 h-96 w-96 rounded-full bg-gradient-to-br from-purple-600 via-fuchsia-500 to-blue-600 opacity-60 blur-3xl animate-pulse-slow" />
-        <div className="absolute -bottom-40 -right-32 h-[28rem] w-[28rem] rounded-full bg-gradient-to-tr from-cyan-500 via-blue-500 to-purple-600 opacity-50 blur-3xl animate-pulse-slower" />
-        <div className="absolute top-1/3 right-1/4 h-72 w-72 rounded-full bg-gradient-to-br from-pink-500 via-rose-400 to-purple-500 opacity-40 blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 left-1/3 h-80 w-80 rounded-full bg-gradient-to-tr from-indigo-500 via-violet-500 to-fuchsia-500 opacity-40 blur-3xl animate-float-delayed" />
-      </div>
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white">
+      {/* ============ LEFT PANEL (blue branding) ============ */}
+      <div className="relative lg:w-1/2 bg-gradient-to-br from-[#3b5bdb] via-[#4263eb] to-[#5c7cfa] text-white flex flex-col p-8 sm:p-12 lg:p-16 overflow-hidden">
+        {/* Subtle decorative shapes */}
+        <div className="pointer-events-none absolute top-0 right-0 h-64 w-64 rounded-full bg-white/5 -translate-y-1/3 translate-x-1/3" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-72 w-72 rounded-full bg-white/5 translate-y-1/3 -translate-x-1/3" />
+        <div className="pointer-events-none absolute top-1/2 right-10 h-32 w-32 rounded-full bg-white/5" />
 
-      {/* Subtle grid overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }}
-      />
-
-      {/* Top bar with logo + system name */}
-      <header className="relative z-10 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-            <Boxes className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+        {/* Top: Logo + System Name */}
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="h-11 w-11 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+            <Boxes className="h-6 w-6 text-white" />
           </div>
           <div>
-            <div className="text-white font-bold text-sm sm:text-lg leading-tight tracking-wide">DFCL-IT</div>
-            <div className="text-[10px] sm:text-xs text-purple-300/80 leading-tight">(Test System)</div>
+            <div className="text-lg font-bold tracking-wide leading-tight">DFCL-IT</div>
+            <div className="text-xs text-blue-100/80 leading-tight">(Test System)</div>
           </div>
         </div>
-        <div className="hidden sm:flex items-center gap-4 text-xs text-white/50">
-          <span className="hover:text-white/80 transition-colors cursor-default">HOME</span>
-          <span className="hover:text-white/80 transition-colors cursor-default">ABOUT</span>
-          <span className="hover:text-white/80 transition-colors cursor-default">CONTACT</span>
-        </div>
-      </header>
 
-      {/* Main content area */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-8 py-6">
-        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-
-          {/* Left: Branding / Welcome message (hidden on mobile, shown on desktop) */}
-          <div className="hidden lg:flex flex-col gap-6 text-white">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-xs text-purple-200 mb-4">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                System Online
-              </div>
-              <h1 className="text-5xl xl:text-6xl font-bold leading-tight">
-                Welcome
-                <span className="block bg-gradient-to-r from-purple-300 via-fuchsia-300 to-blue-300 bg-clip-text text-transparent">
-                  Back.
-                </span>
-              </h1>
+        {/* Center: Welcome message */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center my-8 lg:my-0">
+          <div className="max-w-md">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 text-xs text-blue-50 mb-6">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
+              System Online
             </div>
-            <p className="text-white/60 text-lg max-w-md leading-relaxed">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4">
+              Welcome
+              <span className="block mt-1">Back.</span>
+            </h1>
+            <p className="text-blue-100/90 text-base sm:text-lg leading-relaxed mb-6">
               Barcode & Serial-based Stock Management System. Sign in to manage your purchase, inventory, sales and accounts — all in one place.
             </p>
-            <div className="flex flex-wrap gap-3 mt-2">
+            <div className="flex flex-wrap gap-2">
               {['Purchase', 'Inventory', 'Sales', 'Accounts', 'Reports'].map((m) => (
-                <span key={m} className="px-3 py-1.5 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 text-xs text-white/70">
+                <span key={m} className="px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-sm border border-white/15 text-xs text-blue-50 font-medium">
                   {m}
                 </span>
               ))}
             </div>
           </div>
-
-          {/* Right: Login form card */}
-          <div className="w-full max-w-md mx-auto">
-            <div className="relative">
-              {/* Glow behind card */}
-              <div className="absolute -inset-1 bg-gradient-to-br from-purple-600/40 via-fuchsia-500/30 to-blue-600/40 rounded-2xl blur-xl" />
-              <div className="relative bg-[#13132a]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
-                <div className="text-center mb-6">
-                  <div className="lg:hidden mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/40 mb-3">
-                    <Boxes className="h-7 w-7 text-white" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-white">Sign In</h2>
-                  <p className="text-sm text-white/50 mt-1">Enter your credentials to continue</p>
-                </div>
-
-                <form onSubmit={submit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="userId" className="text-xs text-white/70 font-medium">User ID</Label>
-                    <div className="relative mt-1.5">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                      <Input
-                        id="userId"
-                        value={userId}
-                        onChange={(e) => setUserId(e.target.value)}
-                        placeholder="Enter your user ID"
-                        autoFocus
-                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:bg-white/10 focus:border-purple-400/50"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="password" className="text-xs text-white/70 font-medium">Password</Label>
-                    <div className="relative mt-1.5">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:bg-white/10 focus:border-purple-400/50"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-11 mt-2 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-blue-600 hover:from-purple-500 hover:via-fuchsia-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-purple-500/30 border-0 transition-all"
-                  >
-                    {loading ? (
-                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
-                    ) : (
-                      'LOG IN'
-                    )}
-                  </Button>
-                </form>
-
-                {/* Demo credentials hint */}
-                <div className="mt-5 pt-4 border-t border-white/10">
-                  <div className="text-[10px] uppercase tracking-wider text-white/40 mb-2 text-center">Demo Accounts</div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-white/5 rounded-md px-2.5 py-1.5 border border-white/5">
-                      <div className="text-purple-300 font-medium">👑 Admin</div>
-                      <div className="text-white/50 font-mono text-[10px]">admin / admin123</div>
-                    </div>
-                    <div className="bg-white/5 rounded-md px-2.5 py-1.5 border border-white/5">
-                      <div className="text-blue-300 font-medium">💼 Sales</div>
-                      <div className="text-white/50 font-mono text-[10px]">sales / sales123</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 px-4 sm:px-8 py-4 border-t border-white/10 bg-[#0a0a1a]/60 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-          <div className="text-xs text-white/50">
-            <span className="text-white/70 font-medium">Idea & Developed by:</span>{' '}
-            <span className="bg-gradient-to-r from-purple-300 to-blue-300 bg-clip-text text-transparent font-semibold">Abdur Rahman Akash</span>
+        {/* Bottom: Developer info */}
+        <div className="relative z-10 text-sm space-y-1">
+          <div className="text-blue-50/90">
+            <span className="text-blue-100/70">Idea & Developed by</span>{' '}
+            <span className="font-semibold text-white">Abdur Rahman Akash</span>
           </div>
           <a
             href="https://wa.me/8801534955065"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-white/60 hover:text-emerald-400 transition-colors group"
+            className="inline-flex items-center gap-1.5 text-blue-100/80 hover:text-white transition-colors group"
           >
-            <MessageCircle className="h-3.5 w-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <MessageCircle className="h-3.5 w-3.5" />
             <span>WhatsApp & Contact:</span>
-            <span className="font-mono font-semibold text-emerald-400">01534955065</span>
-            <Phone className="h-3 w-3 text-emerald-400/70" />
+            <span className="font-mono font-semibold">01534955065</span>
+            <Phone className="h-3 w-3 opacity-70" />
           </a>
         </div>
-      </footer>
+      </div>
+
+      {/* ============ RIGHT PANEL (login form on white) ============ */}
+      <div className="lg:w-1/2 bg-white flex flex-col p-6 sm:p-10 lg:p-16">
+        {/* Mobile-only logo at top */}
+        <div className="lg:hidden flex items-center gap-2 mb-8">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#3b5bdb] to-[#5c7cfa] flex items-center justify-center">
+            <Boxes className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <div className="text-base font-bold text-slate-900 leading-tight">DFCL-IT</div>
+            <div className="text-[10px] text-slate-500 leading-tight">(Test System)</div>
+          </div>
+        </div>
+
+        {/* Form area */}
+        <div className="flex-1 flex flex-col justify-center max-w-md w-full mx-auto">
+          {/* User icon */}
+          <div className="flex justify-center mb-6">
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#3b5bdb] to-[#5c7cfa] flex items-center justify-center shadow-lg shadow-blue-200">
+              <User className="h-8 w-8 text-white" />
+            </div>
+          </div>
+
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">Sign In</h2>
+            <p className="text-sm text-slate-500">Enter your credentials to continue</p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <Label htmlFor="userId" className="text-xs text-slate-700 font-medium uppercase tracking-wide">User ID</Label>
+              <div className="relative mt-1.5">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  id="userId"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  placeholder="Enter your user ID"
+                  autoFocus
+                  className="pl-10 h-12 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#4263eb] focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="password" className="text-xs text-slate-700 font-medium uppercase tracking-wide">Password</Label>
+              <div className="relative mt-1.5">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="pl-10 pr-10 h-12 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#4263eb] focus:ring-2 focus:ring-blue-100 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 mt-2 bg-gradient-to-r from-[#3b5bdb] to-[#4263eb] hover:from-[#3551c4] hover:to-[#3a57d4] text-white font-semibold shadow-md shadow-blue-200 border-0 transition-all"
+            >
+              {loading ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Signing in...</>
+              ) : (
+                'Sign In'
+              )}
+            </Button>
+          </form>
+
+          {/* Demo credentials hint */}
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-3 text-center font-semibold">Demo Accounts</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                <div className="text-[#3b5bdb] font-semibold text-xs mb-0.5">👑 Admin</div>
+                <div className="text-slate-500 font-mono text-[10px]">admin / admin123</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                <div className="text-[#5c7cfa] font-semibold text-xs mb-0.5">💼 Sales</div>
+                <div className="text-slate-500 font-mono text-[10px]">sales / sales123</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile-only footer */}
+        <div className="lg:hidden pt-6 mt-6 border-t border-slate-100 text-center text-xs text-slate-500 space-y-1">
+          <div>
+            <span className="text-slate-400">Idea & Developed by</span>{' '}
+            <span className="font-semibold text-slate-700">Abdur Rahman Akash</span>
+          </div>
+          <a
+            href="https://wa.me/8801534955065"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[#3b5bdb]"
+          >
+            <MessageCircle className="h-3 w-3" />
+            <span>WhatsApp & Contact: 01534955065</span>
+          </a>
+        </div>
+      </div>
     </div>
   )
 }
