@@ -64,6 +64,7 @@ export function ItemsPage() {
       fields={fields}
       columns={columns}
       addLabel="Add Item"
+      deleteWarning="⚠️ WARNING: Deleting this item will also delete all its serial numbers, stock transactions, and remove it from purchase/sales/transfer/adjustment line items. This cannot be undone."
     />
   )
 }

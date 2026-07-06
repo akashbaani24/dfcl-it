@@ -33,6 +33,7 @@ export function ResourcePage({
   defaultValues,
   moduleKey,
   onDataChange,  // called after create/update/delete so parent can refresh
+  deleteWarning,  // custom warning message shown in delete confirmation
 }: {
   slug: any
   title: string
@@ -47,6 +48,7 @@ export function ResourcePage({
   defaultValues?: Record<string, any>
   moduleKey?: string
   onDataChange?: () => void
+  deleteWarning?: string
 }) {
   const { hasPerm } = useAuth()
   const permModule = moduleKey || (slug as string)
@@ -91,7 +93,10 @@ export function ResourcePage({
     setOpen(true)
   }
   const onDelete = async (row: any) => {
-    if (!confirm('Are you sure to delete this record?')) return
+    const confirmMsg = deleteWarning
+      ? `${deleteWarning}\n\nAre you sure to delete "${row.name || row.itemCode || row.shortCode || row.employeeCode || 'this record'}"?`
+      : 'Are you sure to delete this record?'
+    if (!confirm(confirmMsg)) return
     try {
       await remove(slug, row.id)
       toast.success('Deleted')

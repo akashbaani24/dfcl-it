@@ -8,6 +8,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { RESOURCES, generateNumber, buildWhere } from '@/lib/resources'
 import { getCurrentUser, getUserEntityIds } from '@/lib/auth-server'
+import {
+  deleteEntityCascade, deleteEmployeeCascade, deleteDepartmentCascade,
+  deleteItemCascade, deleteUserCascade, deleteCategoryCascade, deleteSupplierCascade,
+} from '@/lib/cascade-delete'
 
 // Resources that have an entityId field (need entity filtering for non-admin)
 const ENTITY_FILTERED_RESOURCES = new Set([
@@ -156,7 +160,30 @@ export async function DELETE(req: NextRequest) {
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]
   try {
-    await model.delete({ where: { id } })
+    // Use cascade delete for resources with foreign key relations
+    switch (slug) {
+      case 'entities':
+        await deleteEntityCascade(id)
+        break
+      case 'departments':
+        await deleteDepartmentCascade(id)
+        break
+      case 'employees':
+        await deleteEmployeeCascade(id)
+        break
+      case 'items':
+        await deleteItemCascade(id)
+        break
+      case 'categories':
+        await deleteCategoryCascade(id)
+        break
+      case 'suppliers':
+        await deleteSupplierCascade(id)
+        break
+      default:
+        // For other resources, try direct delete
+        await model.delete({ where: { id } })
+    }
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
