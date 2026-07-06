@@ -109,11 +109,13 @@ export function PurchaseReceivePage() {
         toast.error(`${l.itemName}: receive qty cannot exceed ordered qty (${l.orderedQty})`)
         return
       }
-      if (l.hasSerial) {
+      // Serial is optional — just warn if count doesn't match
+      if (l.serials) {
         const sns = l.serials.split(',').map((s) => s.trim()).filter(Boolean)
-        if (sns.length !== l.receiveQty) {
-          toast.error(`${l.itemName}: serial count (${sns.length}) must match receive qty (${l.receiveQty})`)
-          return
+        if (sns.length > 0 && sns.length !== l.receiveQty) {
+          if (!confirm(`${l.itemName}: serial count (${sns.length}) doesn't match receive qty (${l.receiveQty}). Continue anyway?`)) {
+            return
+          }
         }
       }
     }
@@ -305,7 +307,7 @@ export function PurchaseReceivePage() {
                   <TableHead className="min-w-[180px]">Item</TableHead>
                   <TableHead className="w-24">Ordered</TableHead>
                   <TableHead className="w-28">Receive Qty</TableHead>
-                  <TableHead className="min-w-[260px]">Serial Numbers (if tracked)</TableHead>
+                  <TableHead className="min-w-[260px]">Serial Numbers (optional)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -314,11 +316,6 @@ export function PurchaseReceivePage() {
                     <TableCell>
                       <div className="text-sm font-medium">{l.itemName}</div>
                       <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode}</div>
-                      {l.hasSerial && (
-                        <div className="text-[10px] text-emerald-700 flex items-center gap-1 mt-0.5">
-                          <ScanLine className="h-3 w-3" /> Serial required
-                        </div>
-                      )}
                     </TableCell>
                     <TableCell className="font-medium">{l.orderedQty}</TableCell>
                     <TableCell>
@@ -333,17 +330,13 @@ export function PurchaseReceivePage() {
                       />
                     </TableCell>
                     <TableCell>
-                      {l.hasSerial ? (
-                        <Input
-                          value={l.serials}
-                          onChange={(e) => updateLine(l.purchaseItemId, { serials: e.target.value })}
-                          placeholder="SN001, SN002..."
-                          className="font-mono text-xs"
-                          disabled={!perm.canCreate}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">— (bulk item)</span>
-                      )}
+                      <Input
+                        value={l.serials}
+                        onChange={(e) => updateLine(l.purchaseItemId, { serials: e.target.value })}
+                        placeholder="SN001, SN002... (optional)"
+                        className="font-mono text-xs"
+                        disabled={!perm.canCreate}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
