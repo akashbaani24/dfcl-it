@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create, action, getOne } from '@/lib/api'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
@@ -200,17 +200,25 @@ export function PurchasesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Entity</Label>
-              <Select value={form.entityId} onValueChange={(v) => setForm({ ...form, entityId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
-                <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.entityId || ''}
+                  onChange={(v) => setForm({ ...form, entityId: v })}
+                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  placeholder="Select entity"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Supplier</Label>
-              <Select value={form.supplierId} onValueChange={(v) => setForm({ ...form, supplierId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select supplier" /></SelectTrigger>
-                <SelectContent>{suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.supplierId || ''}
+                  onChange={(v) => setForm({ ...form, supplierId: v })}
+                  options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                  placeholder="Select supplier"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Invoice No</Label>

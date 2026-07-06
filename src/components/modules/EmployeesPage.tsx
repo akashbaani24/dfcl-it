@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Pencil, Trash2, KeyRound, ShieldCheck, FileSpreadsheet, FileText } from 'lucide-react'
 import { list, create, update, remove } from '@/lib/api'
 import { toast } from 'sonner'
@@ -316,13 +316,17 @@ export function EmployeesPage() {
             </div>
             <div>
               <Label className="text-xs">Role</Label>
-              <Select value={loginForm.role} onValueChange={(v) => setLoginForm({ ...loginForm, role: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USER">User (limited by permissions)</SelectItem>
-                  <SelectItem value="ADMIN">Admin (full access)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={loginForm.role}
+                  onChange={(v) => setLoginForm({ ...loginForm, role: v })}
+                  options={[
+                    { value: 'USER', label: 'User (limited by permissions)' },
+                    { value: 'ADMIN', label: 'Admin (full access)' },
+                  ]}
+                  placeholder="Select role"
+                />
+              </div>
               <p className="text-[10px] text-muted-foreground mt-1">Admin role bypasses all permission checks.</p>
             </div>
           </div>

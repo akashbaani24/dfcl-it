@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Save } from 'lucide-react'
 import { list, getOne, update, create } from '@/lib/api'
@@ -144,55 +144,46 @@ export function ItemEditPage() {
             </div>
             <div>
               <Label className="text-xs">Category *</Label>
-              <Select
-                value={form.categoryId || '__NONE__'}
-                onValueChange={(v) => {
-                  // If selecting a top-level category, clear sub-category
-                  const cat = categories.find((c) => c.id === v)
-                  if (cat && !cat.parentId) {
-                    // It's a top-level — check if it has sub-categories
-                    const subs = getSubCategories(v)
-                    if (subs.length > 0) {
-                      // Has sub-categories — don't allow selecting parent directly
-                      toast.info('Please select a sub-category under this category')
-                      return
+              <div className="mt-1">
+                <ComboBox
+                  value={form.categoryId || ''}
+                  onChange={(v) => {
+                    // If selecting a top-level category, clear sub-category
+                    const cat = categories.find((c) => c.id === v)
+                    if (cat && !cat.parentId) {
+                      // It's a top-level — check if it has sub-categories
+                      const subs = getSubCategories(v)
+                      if (subs.length > 0) {
+                        // Has sub-categories — don't allow selecting parent directly
+                        toast.info('Please select a sub-category under this category')
+                        return
+                      }
                     }
-                  }
-                  setForm({ ...form, categoryId: v === '__NONE__' ? '' : v })
-                }}
-              >
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  {topCategories.map((cat) => {
-                    const subs = getSubCategories(cat.id)
-                    if (subs.length === 0) {
-                      // No sub-categories — show as selectable
-                      return <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                    }
-                    // Has sub-categories — show parent as disabled header + subs
-                    return (
-                      <div key={cat.id}>
-                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground pointer-events-none">{cat.name}</div>
-                        {subs.map((sub) => (
-                          <SelectItem key={sub.id} value={sub.id} className="pl-6">↳ {sub.name}</SelectItem>
-                        ))}
-                      </div>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+                    setForm({ ...form, categoryId: v === '__NONE__' ? '' : v })
+                  }}
+                  options={[
+                    ...topCategories.flatMap((cat) => {
+                      const subs = getSubCategories(cat.id)
+                      if (subs.length === 0) {
+                        return [{ value: cat.id, label: cat.name }]
+                      }
+                      return subs.map((sub) => ({ value: sub.id, label: `↳ ${sub.name}` }))
+                    }),
+                  ]}
+                  placeholder="Select category"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Unit of Measure *</Label>
-              <Select
-                value={form.uomId || '__NONE__'}
-                onValueChange={(v) => setForm({ ...form, uomId: v === '__NONE__' ? '' : v })}
-              >
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select UoM" /></SelectTrigger>
-                <SelectContent>
-                  {uoms.map((u) => <SelectItem key={u.id} value={u.id}>{u.name} ({u.shortCode})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.uomId || ''}
+                  onChange={(v) => setForm({ ...form, uomId: v === '__NONE__' ? '' : v })}
+                  options={uoms.map((u) => ({ value: u.id, label: `${u.name} (${u.shortCode})` }))}
+                  placeholder="Select UoM"
+                />
+              </div>
             </div>
           </div>
 

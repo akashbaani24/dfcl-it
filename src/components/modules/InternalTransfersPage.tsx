@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, CheckCircle2 } from 'lucide-react'
@@ -160,17 +160,25 @@ export function InternalTransfersPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">From Entity</Label>
-              <Select value={form.fromEntityId} onValueChange={(v) => setForm({ ...form, fromEntityId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Source" /></SelectTrigger>
-                <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.fromEntityId || ''}
+                  onChange={(v) => setForm({ ...form, fromEntityId: v })}
+                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  placeholder="Source"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">To Entity</Label>
-              <Select value={form.toEntityId} onValueChange={(v) => setForm({ ...form, toEntityId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Destination" /></SelectTrigger>
-                <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.toEntityId || ''}
+                  onChange={(v) => setForm({ ...form, toEntityId: v })}
+                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  placeholder="Destination"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Transfer Date</Label>

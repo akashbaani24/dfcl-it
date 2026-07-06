@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { useState, useEffect } from 'react'
 
@@ -99,19 +100,14 @@ export function FormDialog({
                   rows={2}
                 />
               ) : f.type === 'select' ? (
-                <Select
-                  value={data[f.name] ?? ''}
-                  onValueChange={(v) => setData({ ...data, [f.name]: v })}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder={f.placeholder || 'Select...'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {f.options?.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <ComboBox
+                    value={data[f.name] ?? ''}
+                    onChange={(v) => setData({ ...data, [f.name]: v })}
+                    options={f.options || []}
+                    placeholder={f.placeholder || 'Select...'}
+                  />
+                </div>
               ) : f.type === 'switch' ? (
                 <div className="flex items-center gap-2 mt-2">
                   <Switch

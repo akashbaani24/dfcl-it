@@ -4,7 +4,7 @@ import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { stockView, list } from '@/lib/api'
 import { ScanLine, Barcode } from 'lucide-react'
@@ -73,13 +73,17 @@ export function StockAllPage() {
       <div className="mb-3 flex items-end gap-3">
         <div>
           <Label className="text-xs">Entity</Label>
-          <Select value={entityId || '__ALL__'} onValueChange={(v) => setEntityId(v === '__ALL__' ? '' : v)}>
-            <SelectTrigger className="w-64 mt-1"><SelectValue placeholder="All entities" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__ALL__">All Entities</SelectItem>
-              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name} ({e.shortCode})</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="mt-1 w-64">
+            <ComboBox
+              value={entityId || '__ALL__'}
+              onChange={(v) => setEntityId(v === '__ALL__' ? '' : v)}
+              options={[
+                { value: '__ALL__', label: 'All Entities' },
+                ...entities.map((e) => ({ value: e.id, label: `${e.name} (${e.shortCode})` })),
+              ]}
+              placeholder="All entities"
+            />
+          </div>
         </div>
         <Button onClick={load} variant="outline" size="sm">Refresh</Button>
       </div>

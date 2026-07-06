@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Plus, Trash2, ScanLine } from 'lucide-react'
 import { list } from '@/lib/api'
@@ -85,18 +85,17 @@ export function LineItemEditor({
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <Label className="text-xs">Add Item</Label>
-          <Select value={newItemId} onValueChange={setNewItemId}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select item to add..." />
-            </SelectTrigger>
-            <SelectContent>
-              {items.map((i) => (
-                <SelectItem key={i.id} value={i.id}>
-                  {i.name} ({i.itemCode}) {i.hasSerial && '— Serial Tracking'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="mt-1">
+            <ComboBox
+              value={newItemId || ''}
+              onChange={setNewItemId}
+              options={items.map((i) => ({
+                value: i.id,
+                label: `${i.name} (${i.itemCode})${i.hasSerial ? ' — Serial Tracking' : ''}`,
+              }))}
+              placeholder="Select item to add..."
+            />
+          </div>
         </div>
         <Button type="button" onClick={addLine} size="sm" disabled={!newItemId} className="gap-1">
           <Plus className="h-4 w-4" /> Add Line

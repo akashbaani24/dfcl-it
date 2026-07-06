@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye } from 'lucide-react'
@@ -142,29 +142,41 @@ export function SalesRefundsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Sales Order</Label>
-              <Select value={form.salesId} onValueChange={(v) => setForm({ ...form, salesId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select sale" /></SelectTrigger>
-                <SelectContent>{sales.map((s) => <SelectItem key={s.id} value={s.id}>{s.salesNo} — {s.customerName}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.salesId || ''}
+                  onChange={(v) => setForm({ ...form, salesId: v })}
+                  options={sales.map((s) => ({ value: s.id, label: `${s.salesNo} — ${s.customerName}` }))}
+                  placeholder="Select sale"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Sales Return (optional)</Label>
-              <Select value={form.returnId} onValueChange={(v) => setForm({ ...form, returnId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Link to return (optional)" /></SelectTrigger>
-                <SelectContent>{returns.map((r) => <SelectItem key={r.id} value={r.id}>{r.returnNo}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.returnId || ''}
+                  onChange={(v) => setForm({ ...form, returnId: v })}
+                  options={returns.map((r) => ({ value: r.id, label: r.returnNo }))}
+                  placeholder="Link to return (optional)"
+                />
+              </div>
             </div>
             <div><Label className="text-xs">Amount</Label><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} className="mt-1" /></div>
             <div>
               <Label className="text-xs">Method</Label>
-              <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CASH">Cash</SelectItem>
-                  <SelectItem value="BANK">Bank</SelectItem>
-                  <SelectItem value="MOBILE">Mobile</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.method}
+                  onChange={(v) => setForm({ ...form, method: v })}
+                  options={[
+                    { value: 'CASH', label: 'Cash' },
+                    { value: 'BANK', label: 'Bank' },
+                    { value: 'MOBILE', label: 'Mobile' },
+                  ]}
+                  placeholder="Select method"
+                />
+              </div>
             </div>
             <div><Label className="text-xs">Refund Date</Label><Input type="date" value={form.refundDate} onChange={(e) => setForm({ ...form, refundDate: e.target.value })} className="mt-1" /></div>
             <div className="sm:col-span-2"><Label className="text-xs">Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} /></div>

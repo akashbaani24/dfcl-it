@@ -4,7 +4,7 @@ import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { stockView, list } from '@/lib/api'
 import { ScanLine, Barcode, MapPin } from 'lucide-react'
@@ -72,12 +72,14 @@ export function StockMinePage() {
       <div className="mb-3 flex items-end gap-3">
         <div>
           <Label className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" /> Select Your Entity</Label>
-          <Select value={entityId} onValueChange={setEntityId}>
-            <SelectTrigger className="w-64 mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
-            <SelectContent>
-              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name} ({e.shortCode})</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="mt-1 w-64">
+            <ComboBox
+              value={entityId || ''}
+              onChange={setEntityId}
+              options={entities.map((e) => ({ value: e.id, label: `${e.name} (${e.shortCode})` }))}
+              placeholder="Select entity"
+            />
+          </div>
         </div>
         {entityId && <Button onClick={load} variant="outline" size="sm">Refresh</Button>}
       </div>

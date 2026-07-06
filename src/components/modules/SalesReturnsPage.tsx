@@ -12,7 +12,7 @@ import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, RotateCcw } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 
@@ -165,10 +165,14 @@ export function SalesReturnsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Sales Order</Label>
-              <Select value={form.salesId} onValueChange={onSalesSelect}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select delivered sale" /></SelectTrigger>
-                <SelectContent>{sales.map((s) => <SelectItem key={s.id} value={s.id}>{s.salesNo} — {s.customerName}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.salesId || ''}
+                  onChange={onSalesSelect}
+                  options={sales.map((s) => ({ value: s.id, label: `${s.salesNo} — ${s.customerName}` }))}
+                  placeholder="Select delivered sale"
+                />
+              </div>
             </div>
             <div><Label className="text-xs">Return Date</Label><Input type="date" value={form.returnDate} onChange={(e) => setForm({ ...form, returnDate: e.target.value })} className="mt-1" /></div>
             <div className="sm:col-span-2"><Label className="text-xs">Reason</Label><Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="mt-1" rows={2} /></div>

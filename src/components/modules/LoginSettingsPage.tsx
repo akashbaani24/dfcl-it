@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Upload, Trash2, Save, Image as ImageIcon, Smartphone, Monitor, LayoutGrid } from 'lucide-react'
+import { ComboBox } from '@/components/ui/combobox'
+import { Upload, Trash2, Save, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function LoginSettingsPage() {
@@ -121,26 +121,18 @@ export function LoginSettingsPage() {
             {/* Show on: Mobile / Desktop / Both */}
             <div>
               <Label className="text-xs">Show image on</Label>
-              <Select value={showOn} onValueChange={setShowOn}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="both">
-                    <div className="flex items-center gap-2">
-                      <LayoutGrid className="h-4 w-4" /> Both (Mobile + Desktop)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="desktop">
-                    <div className="flex items-center gap-2">
-                      <Monitor className="h-4 w-4" /> Desktop only
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="mobile">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="h-4 w-4" /> Mobile only
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={showOn}
+                  onChange={setShowOn}
+                  options={[
+                    { value: 'both', label: 'Both (Mobile + Desktop)' },
+                    { value: 'desktop', label: 'Desktop only' },
+                    { value: 'mobile', label: 'Mobile only' },
+                  ]}
+                  placeholder="Select visibility"
+                />
+              </div>
               <p className="text-[10px] text-muted-foreground mt-1">
                 Choose where the image will be visible on the login page
               </p>

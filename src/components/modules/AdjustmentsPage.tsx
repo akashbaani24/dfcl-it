@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, CheckCircle2, XCircle } from 'lucide-react'
@@ -173,20 +173,28 @@ export function AdjustmentsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Entity</Label>
-              <Select value={form.entityId} onValueChange={(v) => setForm({ ...form, entityId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
-                <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.entityId || ''}
+                  onChange={(v) => setForm({ ...form, entityId: v })}
+                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  placeholder="Select entity"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Type</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INCREASE">Increase (found, added)</SelectItem>
-                  <SelectItem value="DECREASE">Decrease (damaged, lost)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.type}
+                  onChange={(v) => setForm({ ...form, type: v })}
+                  options={[
+                    { value: 'INCREASE', label: 'Increase (found, added)' },
+                    { value: 'DECREASE', label: 'Decrease (damaged, lost)' },
+                  ]}
+                  placeholder="Select type"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Date</Label>

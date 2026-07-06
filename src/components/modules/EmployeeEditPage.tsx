@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Save, KeyRound, ShieldCheck, Trash2 } from 'lucide-react'
 import { list, getOne, update, create } from '@/lib/api'
@@ -246,29 +246,31 @@ export function EmployeeEditPage() {
               </div>
               <div>
                 <Label className="text-xs">Entity</Label>
-                <Select
-                  value={form.entityId || '__NONE__'}
-                  onValueChange={(v) => setForm({ ...form, entityId: v === '__NONE__' ? '' : v })}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NONE__">— No Entity —</SelectItem>
-                    {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <ComboBox
+                    value={form.entityId || '__NONE__'}
+                    onChange={(v) => setForm({ ...form, entityId: v === '__NONE__' ? '' : v })}
+                    options={[
+                      { value: '__NONE__', label: '— No Entity —' },
+                      ...entities.map((e) => ({ value: e.id, label: e.name })),
+                    ]}
+                    placeholder="Select entity"
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-xs">Department</Label>
-                <Select
-                  value={form.departmentId || '__NONE__'}
-                  onValueChange={(v) => setForm({ ...form, departmentId: v === '__NONE__' ? '' : v })}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NONE__">— No Department —</SelectItem>
-                    {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <ComboBox
+                    value={form.departmentId || '__NONE__'}
+                    onChange={(v) => setForm({ ...form, departmentId: v === '__NONE__' ? '' : v })}
+                    options={[
+                      { value: '__NONE__', label: '— No Department —' },
+                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                    ]}
+                    placeholder="Select department"
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-xs">Active</Label>
@@ -367,13 +369,17 @@ export function EmployeeEditPage() {
               </div>
               <div>
                 <Label className="text-xs">Role</Label>
-                <Select value={loginForm.role} onValueChange={(v) => setLoginForm({ ...loginForm, role: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USER">User</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <ComboBox
+                    value={loginForm.role}
+                    onChange={(v) => setLoginForm({ ...loginForm, role: v })}
+                    options={[
+                      { value: 'USER', label: 'User' },
+                      { value: 'ADMIN', label: 'Admin' },
+                    ]}
+                    placeholder="Select role"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-4">

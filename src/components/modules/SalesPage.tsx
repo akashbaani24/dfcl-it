@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, PackageCheck, ScanLine } from 'lucide-react'
@@ -180,10 +180,14 @@ export function SalesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Selling Entity</Label>
-              <Select value={form.entityId} onValueChange={(v) => setForm({ ...form, entityId: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
-                <SelectContent>{entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.entityId || ''}
+                  onChange={(v) => setForm({ ...form, entityId: v })}
+                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  placeholder="Select entity"
+                />
+              </div>
             </div>
             <div><Label className="text-xs">Sales Date</Label><Input type="date" value={form.salesDate} onChange={(e) => setForm({ ...form, salesDate: e.target.value })} className="mt-1" /></div>
             <div><Label className="text-xs">Customer Name</Label><Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} className="mt-1" /></div>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, Undo2 } from 'lucide-react'
@@ -168,10 +168,14 @@ export function PurchaseReturnsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Purchase</Label>
-              <Select value={form.purchaseId} onValueChange={onPurchaseSelect}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select received purchase" /></SelectTrigger>
-                <SelectContent>{purchases.map((p) => <SelectItem key={p.id} value={p.id}>{p.purchaseNo} — {p.supplier?.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <ComboBox
+                  value={form.purchaseId || ''}
+                  onChange={onPurchaseSelect}
+                  options={purchases.map((p) => ({ value: p.id, label: `${p.purchaseNo} — ${p.supplier?.name}` }))}
+                  placeholder="Select received purchase"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs">Return Date</Label>

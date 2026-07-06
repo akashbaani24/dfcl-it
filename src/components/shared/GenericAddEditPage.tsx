@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Save } from 'lucide-react'
 import { list, getOne, update, create } from '@/lib/api'
@@ -174,18 +175,14 @@ export function GenericAddEditPage({
                       rows={2}
                     />
                   ) : f.type === 'select' ? (
-                    <Select
-                      value={form[f.name] || '__NONE__'}
-                      onValueChange={(v) => setForm({ ...form, [f.name]: v === '__NONE__' ? '' : v })}
-                    >
-                      <SelectTrigger className="mt-1"><SelectValue placeholder={f.placeholder || 'Select...'} /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__NONE__">— None —</SelectItem>
-                        {(selectOptions[f.name] || f.options || []).filter((o: any) => o.value !== '__DYNAMIC__').map((o: any) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-1">
+                      <ComboBox
+                        value={form[f.name] ?? ''}
+                        onChange={(v) => setForm({ ...form, [f.name]: v })}
+                        options={(selectOptions[f.name] || f.options || []).filter((o: any) => o.value !== '__DYNAMIC__')}
+                        placeholder={f.placeholder || 'Select...'}
+                      />
+                    </div>
                   ) : f.type === 'switch' ? (
                     <div className="flex items-center gap-2 mt-2">
                       <Switch
