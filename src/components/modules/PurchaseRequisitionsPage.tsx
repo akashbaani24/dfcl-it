@@ -11,10 +11,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { list, create, action } from '@/lib/api'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { toast } from 'sonner'
 import { CheckCircle2, XCircle, Eye } from 'lucide-react'
 
 export function PurchaseRequisitionsPage() {
+  const perm = usePerm('purchase-requisitions')
   const [rows, setRows] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -90,8 +92,28 @@ export function PurchaseRequisitionsPage() {
       <PageHeader
         title="Purchase Requisitions"
         description="Internal requests to purchase items. Requires approval before becoming a Purchase Order."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Requisition"
+      />
+      <ExportButtons
+        module="purchase-requisitions"
+        title="Purchase Requisitions"
+        rows={rows.map((r) => ({
+          reqNo: r.reqNo,
+          date: new Date(r.requestDate).toLocaleDateString(),
+          entity: r.entity?.name,
+          requestedBy: r.requestedBy,
+          items: r.items?.length || 0,
+          status: r.status,
+        }))}
+        columns={[
+          { key: 'reqNo', label: 'Req No' },
+          { key: 'date', label: 'Date' },
+          { key: 'entity', label: 'Entity' },
+          { key: 'requestedBy', label: 'Requested By' },
+          { key: 'items', label: 'Items' },
+          { key: 'status', label: 'Status' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
@@ -124,7 +146,7 @@ export function PurchaseRequisitionsPage() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {r.status === 'PENDING' && (
+                        {r.status === 'PENDING' && perm.canUpdate && (
                           <>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => approve(r.id)}>
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -221,7 +243,7 @@ export function PurchaseRequisitionsPage() {
               </TableBody>
             </Table>
           </div>
-          {viewing?.status === 'PENDING' && (
+          {viewing?.status === 'PENDING' && perm.canUpdate && (
             <DialogFooter>
               <Button variant="destructive" onClick={() => reject(viewing.id)}><XCircle className="h-4 w-4 mr-1" /> Reject</Button>
               <Button onClick={() => approve(viewing.id)}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>

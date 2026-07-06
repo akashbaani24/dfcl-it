@@ -51,6 +51,7 @@ export function AccountsExpensesPage() {
       addLabel="Add Expense"
       filter={{ type: 'EXPENSE' }}
       defaultValues={{ type: 'EXPENSE' }}
+      moduleKey="accounts-expenses"
     />
   )
 }

@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { list, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, PackageCheck } from 'lucide-react'
+import { usePerm } from '@/components/shared/Perms'
 
 export function SalesDeliveryPage() {
+  const perm = usePerm('sales-delivery')
   const [rows, setRows] = useState<any[]>([])
   const [viewing, setViewing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -70,7 +72,9 @@ export function SalesDeliveryPage() {
                     <TableCell><Badge status={r.status} /></TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}><Eye className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => deliver(r.id)}><PackageCheck className="h-3.5 w-3.5" /></Button>
+                      {perm.canUpdate && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => deliver(r.id)}><PackageCheck className="h-3.5 w-3.5" /></Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -104,7 +108,11 @@ export function SalesDeliveryPage() {
             </Table>
           </div>
           <DialogFooter>
-            <Button onClick={() => deliver(viewing.id)}><PackageCheck className="h-4 w-4 mr-1" /> Mark Delivered</Button>
+            {perm.canUpdate ? (
+              <Button onClick={() => deliver(viewing.id)}><PackageCheck className="h-4 w-4 mr-1" /> Mark Delivered</Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">You don't have permission to mark deliveries.</p>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

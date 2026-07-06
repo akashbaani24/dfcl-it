@@ -13,8 +13,10 @@ import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, PackageCheck, ScanLine } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function SalesPage() {
+  const perm = usePerm('sales')
   const [rows, setRows] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -87,8 +89,34 @@ export function SalesPage() {
       <PageHeader
         title="Sales"
         description="Create sales orders with serial numbers of products being sold."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Sale"
+      />
+      <ExportButtons
+        module="sales"
+        title="Sales Orders"
+        rows={rows.map((r) => ({
+          salesNo: r.salesNo,
+          date: new Date(r.salesDate).toLocaleDateString(),
+          entity: r.entity?.name,
+          customer: r.customerName,
+          phone: r.customerPhone,
+          total: r.totalAmount,
+          paid: r.paidAmount,
+          status: r.status,
+          delivery: r.deliveryStatus,
+        }))}
+        columns={[
+          { key: 'salesNo', label: 'Sales No' },
+          { key: 'date', label: 'Date' },
+          { key: 'entity', label: 'Entity' },
+          { key: 'customer', label: 'Customer' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'total', label: 'Total' },
+          { key: 'paid', label: 'Paid' },
+          { key: 'status', label: 'Status' },
+          { key: 'delivery', label: 'Delivery' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
@@ -196,7 +224,7 @@ export function SalesPage() {
               </TableBody>
             </Table>
           </div>
-          {viewing?.status === 'PENDING' && (
+          {viewing?.status === 'PENDING' && perm.canUpdate && (
             <DialogFooter>
               <Button onClick={() => { action('deliver-sales', viewing.id).then(() => { toast.success('Delivered & stock updated'); load(); setViewing(null) }) }}>
                 <PackageCheck className="h-4 w-4 mr-1" /> Mark Delivered (Update Stock)

@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label'
 import { stockView, list } from '@/lib/api'
 import { ScanLine, Barcode, MapPin } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function StockMinePage() {
+  const perm = usePerm('stock-mine')
   const [data, setData] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [entityId, setEntityId] = useState<string>('')
@@ -34,6 +36,26 @@ export function StockMinePage() {
       <PageHeader
         title="My Entity Stock"
         description="Stock currently held by a specific entity (branch/showroom/warehouse)"
+      />
+      <ExportButtons
+        module="stock-mine"
+        title="My Entity Stock"
+        rows={data.filter((r) => r.balance > 0).map((r) => ({
+          itemCode: r.item?.itemCode,
+          barcode: r.item?.barcode,
+          name: r.item?.name,
+          category: r.item?.category?.name,
+          balance: r.balance,
+          serials: r.item?.hasSerial ? (r.serials?.length || 0) : '—',
+        }))}
+        columns={[
+          { key: 'itemCode', label: 'Item Code' },
+          { key: 'barcode', label: 'Barcode' },
+          { key: 'name', label: 'Item Name' },
+          { key: 'category', label: 'Category' },
+          { key: 'balance', label: 'Balance' },
+          { key: 'serials', label: 'Serials In Stock' },
+        ]}
       />
       <div className="mb-3 flex items-end gap-3">
         <div>

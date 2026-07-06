@@ -13,8 +13,10 @@ import { toast } from 'sonner'
 import { Eye, RotateCcw } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function SalesReturnsPage() {
+  const perm = usePerm('sales-returns')
   const [rows, setRows] = useState<any[]>([])
   const [sales, setSales] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -84,8 +86,26 @@ export function SalesReturnsPage() {
       <PageHeader
         title="Sales Returns"
         description="Customer returns. Returned serials are marked IN_STOCK again."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Return"
+      />
+      <ExportButtons
+        module="sales-returns"
+        title="Sales Returns"
+        rows={rows.map((r) => ({
+          returnNo: r.returnNo,
+          sales: r.sales?.salesNo,
+          date: new Date(r.returnDate).toLocaleDateString(),
+          reason: r.reason,
+          total: r.totalAmount,
+        }))}
+        columns={[
+          { key: 'returnNo', label: 'Return No' },
+          { key: 'sales', label: 'Sales' },
+          { key: 'date', label: 'Date' },
+          { key: 'reason', label: 'Reason' },
+          { key: 'total', label: 'Total' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>

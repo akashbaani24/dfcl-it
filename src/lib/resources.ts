@@ -31,7 +31,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   },
   'employees': {
     model: 'employee',
-    include: { department: true, entity: true },
+    include: { department: true, entity: true, user: { include: { permissions: true } } },
     writable: true, updatable: true, deletable: true,
   },
   'uoms': {

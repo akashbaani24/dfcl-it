@@ -63,7 +63,41 @@ model Employee {
   entity       Entity   @relation(fields: [entityId], references: [id])
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+  user         User?
 }
+
+// Login account linked to an employee
+model User {
+  id         String   @id @default(cuid())
+  userId     String   @unique   // login id, e.g. "rahim" or "EMP-001"
+  password   String              // SHA-256 hashed
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  role       String   @default("USER")  // ADMIN or USER
+  isActive   Boolean  @default(true)
+  lastLogin  DateTime?
+  permissions Permission[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Per-module permission flags for each user
+model Permission {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module     String   // e.g. 'entities', 'purchases', 'reports-stock'
+  canView    Boolean  @default(false)
+  canCreate  Boolean  @default(false)
+  canEdit    Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canUpdate  Boolean  @default(false)  // status updates: approve / receive / deliver
+  canExcel   Boolean  @default(false)  // excel export
+  canPdf     Boolean  @default(false)  // pdf export
+
+  @@unique([userId, module])
+}
+
 
 model UoM {
   id        String   @id @default(cuid())

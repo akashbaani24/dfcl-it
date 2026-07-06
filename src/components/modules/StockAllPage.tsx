@@ -10,8 +10,10 @@ import { stockView, list } from '@/lib/api'
 import { ScanLine, Barcode } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/shared/PageHeader'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function StockAllPage() {
+  const perm = usePerm('stock-all')
   const [data, setData] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [entityId, setEntityId] = useState<string>('')
@@ -33,6 +35,28 @@ export function StockAllPage() {
       <PageHeader
         title="All Entity Stock"
         description="Aggregated stock view across all entities or filter by entity"
+      />
+      <ExportButtons
+        module="stock-all"
+        title="Stock Summary"
+        rows={data.filter((r) => r.balance > 0).map((r) => ({
+          itemCode: r.item?.itemCode,
+          barcode: r.item?.barcode,
+          name: r.item?.name,
+          category: r.item?.category?.parent?.name ? r.item.category.parent.name + ' → ' + r.item.category.name : r.item?.category?.name,
+          uom: r.item?.uom?.shortCode,
+          balance: r.balance,
+          serialTracking: r.item?.hasSerial ? 'Yes' : 'No',
+        }))}
+        columns={[
+          { key: 'itemCode', label: 'Item Code' },
+          { key: 'barcode', label: 'Barcode' },
+          { key: 'name', label: 'Item Name' },
+          { key: 'category', label: 'Category' },
+          { key: 'uom', label: 'UoM' },
+          { key: 'balance', label: 'Balance' },
+          { key: 'serialTracking', label: 'Serial Tracking' },
+        ]}
       />
       <div className="mb-3 flex items-end gap-3">
         <div>

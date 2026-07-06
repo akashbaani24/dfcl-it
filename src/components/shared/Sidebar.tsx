@@ -1,17 +1,26 @@
 'use client'
 import { useApp } from '@/lib/store'
+import { useAuth } from '@/lib/auth-store'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { SECTIONS } from './SidebarData'
+import { PermissionAction } from '@/lib/auth'
 
 export function Sidebar() {
   const { active, setActive, sidebarOpen } = useApp()
+  const { hasPerm } = useAuth()
   const [open, setOpen] = useState<Record<string, boolean>>(
     Object.fromEntries(SECTIONS.map((s) => [s.title, s.defaultOpen ?? false]))
   )
 
   if (!sidebarOpen) return null
+
+  // Filter sections & items by canView permission
+  const visibleSections = SECTIONS.map((sec) => ({
+    ...sec,
+    items: sec.items.filter((item) => hasPerm(item.key as string, 'canView' as PermissionAction)),
+  })).filter((sec) => sec.items.length > 0)
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 border-r bg-card/40 backdrop-blur-sm flex-col">
@@ -25,7 +34,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-2 max-h-[calc(100vh-3.5rem)]">
-        {SECTIONS.map((sec) => {
+        {visibleSections.map((sec) => {
           const isOpen = open[sec.title]
           const Icon = sec.icon
           const anyActive = sec.items.some((i) => i.key === active)

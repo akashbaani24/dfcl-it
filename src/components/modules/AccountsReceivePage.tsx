@@ -51,6 +51,7 @@ export function AccountsReceivePage() {
       addLabel="Add Receive"
       filter={{ type: 'RECEIVE' }}
       defaultValues={{ type: 'RECEIVE' }}
+      moduleKey="accounts-receive"
     />
   )
 }

@@ -1,5 +1,7 @@
 // Seed script - populate demo data for the inventory system
 import { db } from '../src/lib/db'
+import { hashPassword } from '../src/lib/auth-server'
+import { ALL_MODULES } from '../src/lib/auth'
 
 async function main() {
   console.log('Seeding...')
@@ -109,7 +111,75 @@ async function main() {
   await db.accountEntry.create({ data: { entryNo: 'EXP-0002', entityId: hq.id, type: 'EXPENSE', category: 'UTILITIES', amount: 4800, method: 'CASH', description: 'Electricity bill' } })
   await db.accountEntry.create({ data: { entryNo: 'RCV-0001', entityId: hq.id, type: 'RECEIVE', category: 'SALES_PAYMENT', amount: 125000, method: 'BANK', description: 'Bulk sales payment received' } })
 
+  // 11. Create admin user (full permissions) + a sample sales user (limited permissions)
+  const adminEmp = await db.employee.findFirst({ where: { employeeCode: 'EMP-001' } })
+  if (adminEmp) {
+    const admin = await db.user.create({
+      data: {
+        userId: 'admin',
+        password: hashPassword('admin123'),
+        employeeId: adminEmp.id,
+        role: 'ADMIN',
+        isActive: true,
+      },
+    })
+    // Admin gets full permissions on every module
+    for (const m of ALL_MODULES) {
+      await db.permission.create({
+        data: {
+          userId: admin.id,
+          module: m.key,
+          canView: true, canCreate: true, canEdit: true, canDelete: true,
+          canUpdate: true, canExcel: true, canPdf: true,
+        },
+      })
+    }
+  }
+
+  const salesEmp = await db.employee.findFirst({ where: { employeeCode: 'EMP-002' } })
+  if (salesEmp) {
+    const salesUser = await db.user.create({
+      data: {
+        userId: 'sales',
+        password: hashPassword('sales123'),
+        employeeId: salesEmp.id,
+        role: 'USER',
+        isActive: true,
+      },
+    })
+    // Sales user: can view dashboard + sales + stock, can create/edit sales, no admin/setup access
+    const salesPerms: Record<string, any> = {
+      'dashboard': { canView: true, canExcel: true, canPdf: true },
+      'sales': { canView: true, canCreate: true, canEdit: true, canExcel: true, canPdf: true },
+      'sales-delivery': { canView: true, canUpdate: true },
+      'sales-returns': { canView: true, canCreate: true },
+      'sales-refunds': { canView: true, canCreate: true },
+      'stock-all': { canView: true },
+      'stock-mine': { canView: true },
+      'reports-sales': { canView: true, canExcel: true, canPdf: true },
+      'reports-stock': { canView: true },
+      'reports-serial': { canView: true },
+    }
+    for (const [module, flags] of Object.entries(salesPerms)) {
+      await db.permission.create({
+        data: {
+          userId: salesUser.id,
+          module,
+          canView: !!flags.canView,
+          canCreate: !!flags.canCreate,
+          canEdit: !!flags.canEdit,
+          canDelete: !!flags.canDelete,
+          canUpdate: !!flags.canUpdate,
+          canExcel: !!flags.canExcel,
+          canPdf: !!flags.canPdf,
+        },
+      })
+    }
+  }
+
   console.log('Seed complete.')
+  console.log('  Admin login:    admin / admin123')
+  console.log('  Sales login:    sales / sales123')
 }
 
 main()

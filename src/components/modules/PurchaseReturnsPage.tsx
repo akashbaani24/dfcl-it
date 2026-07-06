@@ -13,8 +13,10 @@ import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, Undo2 } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function PurchaseReturnsPage() {
+  const perm = usePerm('purchase-returns')
   const [returns, setReturns] = useState<any[]>([])
   const [purchases, setPurchases] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -85,8 +87,26 @@ export function PurchaseReturnsPage() {
       <PageHeader
         title="Purchase Returns"
         description="Return items to supplier. Serials are marked as RETURNED."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Return"
+      />
+      <ExportButtons
+        module="purchase-returns"
+        title="Purchase Returns"
+        rows={returns.map((r) => ({
+          returnNo: r.returnNo,
+          purchase: r.purchase?.purchaseNo,
+          date: new Date(r.returnDate).toLocaleDateString(),
+          reason: r.reason,
+          total: r.totalAmount,
+        }))}
+        columns={[
+          { key: 'returnNo', label: 'Return No' },
+          { key: 'purchase', label: 'Purchase' },
+          { key: 'date', label: 'Date' },
+          { key: 'reason', label: 'Reason' },
+          { key: 'total', label: 'Total' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>

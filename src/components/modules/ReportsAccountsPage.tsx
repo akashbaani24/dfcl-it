@@ -4,21 +4,47 @@ import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { report } from '@/lib/api'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function ReportsAccountsPage() {
+  const perm = usePerm('reports-accounts')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!perm.canView) return
     report('accounts-summary').then((r) => setData(r)).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+  }, [perm.canView])
 
+  if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
   if (loading) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
   if (!data) return <EmptyState title="No data" />
+
+  const exportRows = (data.entries || []).map((e: any) => ({
+    entryNo: e.entryNo,
+    date: new Date(e.date).toLocaleDateString(),
+    entity: e.entity?.name,
+    type: e.type,
+    category: e.category,
+    method: e.method,
+    amount: e.amount,
+    description: e.description,
+  }))
+  const exportColumns = [
+    { key: 'entryNo', label: 'Entry No' },
+    { key: 'date', label: 'Date' },
+    { key: 'entity', label: 'Entity' },
+    { key: 'type', label: 'Type' },
+    { key: 'category', label: 'Category' },
+    { key: 'method', label: 'Method' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'description', label: 'Description' },
+  ]
 
   return (
     <div>
       <PageHeader title="Accounts Report" description="Daily expenses & receive summary" />
+      <ExportButtons module="reports-accounts" title="Accounts Report" rows={exportRows} columns={exportColumns} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Expense</div><div className="text-2xl font-bold text-rose-600">৳{data.totalExpense.toFixed(2)}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Receive</div><div className="text-2xl font-bold text-emerald-600">৳{data.totalReceive.toFixed(2)}</div></CardContent></Card>

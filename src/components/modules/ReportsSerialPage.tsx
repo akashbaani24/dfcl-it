@@ -7,16 +7,21 @@ import { report } from '@/lib/api'
 import { ScanLine } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function ReportsSerialPage() {
+  const perm = usePerm('reports-serial')
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
   useEffect(() => {
+    if (!perm.canView) return
     report('serial-status').then((r) => setRows(r)).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+  }, [perm.canView])
+
+  if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
 
   const filtered = rows.filter((r) => {
     if (statusFilter && r.status !== statusFilter) return false
@@ -27,12 +32,30 @@ export function ReportsSerialPage() {
     return true
   })
 
+  const exportRows = filtered.map((r) => ({
+    serialNumber: r.serialNumber,
+    item: r.item?.name,
+    category: r.item?.category?.name,
+    entity: r.entity?.name,
+    status: r.status,
+    updatedAt: new Date(r.updatedAt).toLocaleString(),
+  }))
+  const exportColumns = [
+    { key: 'serialNumber', label: 'Serial Number' },
+    { key: 'item', label: 'Item' },
+    { key: 'category', label: 'Category' },
+    { key: 'entity', label: 'Currently At' },
+    { key: 'status', label: 'Status' },
+    { key: 'updatedAt', label: 'Last Updated' },
+  ]
+
   return (
     <div>
       <PageHeader
         title="Serial Status Report"
         description="Live status of every serial number — In Stock, Sold, Returned, Damaged"
       />
+      <ExportButtons module="reports-serial" title="Serial Status Report" rows={exportRows} columns={exportColumns} />
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <div>
           <Label className="text-xs">Search</Label>

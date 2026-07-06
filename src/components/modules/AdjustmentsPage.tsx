@@ -13,8 +13,10 @@ import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, CheckCircle2, XCircle } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function AdjustmentsPage() {
+  const perm = usePerm('adjustments')
   const [rows, setRows] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -82,8 +84,28 @@ export function AdjustmentsPage() {
       <PageHeader
         title="Adjustments & Approval"
         description="Manual stock increases or decreases (damaged, lost, found, etc.)"
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Adjustment"
+      />
+      <ExportButtons
+        module="adjustments"
+        title="Stock Adjustments"
+        rows={rows.map((r) => ({
+          adjustNo: r.adjustNo,
+          entity: r.entity?.name,
+          type: r.type,
+          date: new Date(r.adjustDate).toLocaleDateString(),
+          reason: r.reason,
+          status: r.status,
+        }))}
+        columns={[
+          { key: 'adjustNo', label: 'Adjust No' },
+          { key: 'entity', label: 'Entity' },
+          { key: 'type', label: 'Type' },
+          { key: 'date', label: 'Date' },
+          { key: 'reason', label: 'Reason' },
+          { key: 'status', label: 'Status' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
@@ -115,7 +137,7 @@ export function AdjustmentsPage() {
                     <TableCell><Badge status={r.status} /></TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}><Eye className="h-3.5 w-3.5" /></Button>
-                      {r.status === 'PENDING' && (
+                      {r.status === 'PENDING' && perm.canUpdate && (
                         <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => approve(r.id)}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => reject(r.id)}><XCircle className="h-3.5 w-3.5" /></Button>
@@ -201,7 +223,7 @@ export function AdjustmentsPage() {
               </TableBody>
             </Table>
           </div>
-          {viewing?.status === 'PENDING' && (
+          {viewing?.status === 'PENDING' && perm.canUpdate && (
             <DialogFooter>
               <Button variant="destructive" onClick={() => reject(viewing.id)}>Reject</Button>
               <Button onClick={() => approve(viewing.id)}>Approve</Button>

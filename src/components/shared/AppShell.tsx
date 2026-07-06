@@ -1,10 +1,16 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useApp } from '@/lib/store'
+import { useAuth } from '@/lib/auth-store'
 import { Sidebar } from '@/components/shared/Sidebar'
 import { NewsTicker } from '@/components/shared/NewsTicker'
+import { LoginPage } from '@/components/shared/LoginPage'
 import { Button } from '@/components/ui/button'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, LogOut, User as UserIcon, Loader2 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Dashboard } from '@/components/modules/Dashboard'
 import { EntitiesPage } from '@/components/modules/EntitiesPage'
 import { DepartmentsPage } from '@/components/modules/DepartmentsPage'
@@ -35,8 +41,36 @@ import { ReportsAccountsPage } from '@/components/modules/ReportsAccountsPage'
 import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
 
 export function AppShell() {
-  const { active, sidebarOpen, toggleSidebar } = useApp()
+  const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
+  const { user, loading, setAuth, setLoading, logout } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // Fetch current user on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.id) setAuth(d)
+        else setAuth(null)
+      })
+      .catch(() => setAuth(null))
+      .finally(() => setLoading(false))
+  }, [setAuth, setLoading])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!user) return <LoginPage />
+
+  const handleLogout = async () => {
+    await logout()
+    setActive('dashboard')
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -53,9 +87,32 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex-1" />
-        <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="px-2 py-1 rounded bg-accent">Logged in as Admin</span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
+              </div>
+              <div className="hidden sm:block text-left">
+                <div className="text-xs font-medium leading-tight">{user.employee?.name || user.userId}</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">
+                  {user.role === 'ADMIN' ? '👑 Administrator' : 'User'} · {user.userId}
+                </div>
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <div className="text-sm font-medium">{user.employee?.name || user.userId}</div>
+              <div className="text-xs text-muted-foreground font-normal">{user.employee?.designation || '—'}</div>
+              <div className="text-xs text-muted-foreground font-normal">{user.employee?.email || user.userId}</div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4 mr-2" /> Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       <NewsTicker />
@@ -90,25 +147,29 @@ export function AppShell() {
 }
 
 function MobileNav({ onClose }: { onClose: () => void }) {
-  // Render the same sidebar items but inside the mobile drawer
   const { setActive } = useApp()
-  // Reuse Sidebar by toggling. For simplicity, render compact version here:
+  const { hasPerm } = useAuth()
   return (
     <div className="p-2 overflow-y-auto h-[calc(100vh-3.5rem)]">
-      <SidebarCompact onPick={() => onClose()} setActive={setActive} />
+      <SidebarCompact onPick={() => onClose()} setActive={setActive} hasPerm={hasPerm} />
     </div>
   )
 }
 
 import { SECTIONS } from '@/components/shared/SidebarData'
+import { PermissionAction } from '@/lib/auth'
 
-function SidebarCompact({ onPick, setActive }: { onPick: () => void; setActive: (m: any) => void }) {
+function SidebarCompact({ onPick, setActive, hasPerm }: { onPick: () => void; setActive: (m: any) => void; hasPerm: (m: string, a: PermissionAction) => boolean }) {
   const [open, setOpen] = useState<Record<string, boolean>>(
     Object.fromEntries(SECTIONS.map((s) => [s.title, s.defaultOpen ?? false]))
   )
+  const visibleSections = SECTIONS.map((sec) => ({
+    ...sec,
+    items: sec.items.filter((item) => hasPerm(item.key as string, 'canView' as PermissionAction)),
+  })).filter((sec) => sec.items.length > 0)
   return (
     <div>
-      {SECTIONS.map((sec) => {
+      {visibleSections.map((sec) => {
         const Icon = sec.icon
         const isOpen = open[sec.title]
         return (

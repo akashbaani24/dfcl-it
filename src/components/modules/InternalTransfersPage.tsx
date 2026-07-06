@@ -13,8 +13,10 @@ import { list, create, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, CheckCircle2 } from 'lucide-react'
 import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function InternalTransfersPage() {
+  const perm = usePerm('internal-transfers')
   const [rows, setRows] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -76,8 +78,26 @@ export function InternalTransfersPage() {
       <PageHeader
         title="Internal Transfers"
         description="Move stock between entities. Source entity releases, destination receives."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Transfer"
+      />
+      <ExportButtons
+        module="internal-transfers"
+        title="Internal Transfers"
+        rows={rows.map((r) => ({
+          transferNo: r.transferNo,
+          date: new Date(r.transferDate).toLocaleDateString(),
+          from: r.fromEntity?.name,
+          to: r.toEntity?.name,
+          status: r.status,
+        }))}
+        columns={[
+          { key: 'transferNo', label: 'Transfer No' },
+          { key: 'date', label: 'Date' },
+          { key: 'from', label: 'From' },
+          { key: 'to', label: 'To' },
+          { key: 'status', label: 'Status' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
@@ -107,7 +127,7 @@ export function InternalTransfersPage() {
                     <TableCell><Badge status={r.status} /></TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}><Eye className="h-3.5 w-3.5" /></Button>
-                      {r.status === 'PENDING' && (
+                      {r.status === 'PENDING' && perm.canUpdate && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => receive(r.id)}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
                       )}
                     </TableCell>
@@ -187,7 +207,7 @@ export function InternalTransfersPage() {
               </TableBody>
             </Table>
           </div>
-          {viewing?.status === 'PENDING' && (
+          {viewing?.status === 'PENDING' && perm.canUpdate && (
             <DialogFooter>
               <Button onClick={() => receive(viewing.id)}><CheckCircle2 className="h-4 w-4 mr-1" /> Mark Received</Button>
             </DialogFooter>

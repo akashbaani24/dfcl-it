@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { list, create } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye } from 'lucide-react'
+import { usePerm, ExportButtons } from '@/components/shared/Perms'
 
 export function SalesRefundsPage() {
+  const perm = usePerm('sales-refunds')
   const [rows, setRows] = useState<any[]>([])
   const [sales, setSales] = useState<any[]>([])
   const [returns, setReturns] = useState<any[]>([])
@@ -59,8 +61,28 @@ export function SalesRefundsPage() {
       <PageHeader
         title="Sales Refunds"
         description="Record refunds to customers — by cash, bank, or mobile."
-        onAdd={startNew}
+        onAdd={perm.canCreate ? startNew : undefined}
         addLabel="New Refund"
+      />
+      <ExportButtons
+        module="sales-refunds"
+        title="Sales Refunds"
+        rows={rows.map((r) => ({
+          refundNo: r.refundNo,
+          sales: r.sales?.salesNo,
+          date: new Date(r.refundDate).toLocaleDateString(),
+          amount: r.amount,
+          method: r.method,
+          notes: r.notes,
+        }))}
+        columns={[
+          { key: 'refundNo', label: 'Refund No' },
+          { key: 'sales', label: 'Sales' },
+          { key: 'date', label: 'Date' },
+          { key: 'amount', label: 'Amount' },
+          { key: 'method', label: 'Method' },
+          { key: 'notes', label: 'Notes' },
+        ]}
       />
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
