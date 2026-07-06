@@ -99,11 +99,18 @@ export function ResourcePage({
     if (!confirm(confirmMsg)) return
     try {
       await remove(slug, row.id)
-      toast.success('Deleted')
+      toast.success('Deleted successfully')
       load()
       onDataChange?.()
     } catch (e: any) {
-      toast.error(e.message || 'Failed to delete')
+      // Try to parse JSON error message (API returns {error: "message"})
+      let msg = e.message || 'Failed to delete'
+      try {
+        const parsed = JSON.parse(msg)
+        if (parsed.error) msg = parsed.error
+      } catch {}
+      // Show as error toast — Bengali messages will display correctly
+      toast.error(msg, { duration: 6000 })
     }
   }
   const onSubmit = async (data: any) => {

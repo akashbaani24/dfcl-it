@@ -48,7 +48,7 @@ export function EntitiesPage() {
       columns={columns}
       addLabel="Add Entity"
       onDataChange={() => setRefreshKey((k) => k + 1)}
-      deleteWarning="⚠️ WARNING: Deleting this entity will also delete ALL related data — departments, employees (and their logins), suppliers, stock, purchases, sales, accounts, item serials, and transfers under this entity. This cannot be undone."
+      deleteWarning="⚠️ এই Entity delete করা হবে। যদি এর অধীনে কোনো লেনদেনকৃত ডাটা (departments, employees, suppliers, stock, purchases, sales ইত্যাদি) থাকে, তবে delete হবে না এবং inactive করতে বলা হবে।"
     />
   )
 }
