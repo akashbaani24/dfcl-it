@@ -26,10 +26,10 @@ export function Sidebar() {
     <aside className="hidden md:flex w-64 shrink-0 border-r bg-card/40 backdrop-blur-sm flex-col">
       <div className="h-14 flex items-center px-4 border-b">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">IP</div>
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 text-white flex items-center justify-center font-bold text-xs">DF</div>
           <div>
-            <div className="text-sm font-bold leading-tight">InventoryPro</div>
-            <div className="text-[10px] text-muted-foreground">Barcode + Serial Stock</div>
+            <div className="text-sm font-bold leading-tight">DFCL-IT</div>
+            <div className="text-[10px] text-muted-foreground">(Test System)</div>
           </div>
         </div>
       </div>

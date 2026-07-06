@@ -81,10 +81,10 @@ export function AppShell() {
           <Menu className="h-5 w-5" />
         </Button>
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-md bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">IP</div>
+          <div className="h-7 w-7 rounded-md bg-gradient-to-br from-purple-500 to-blue-500 text-white flex items-center justify-center text-xs font-bold">DF</div>
           <div className="hidden sm:block">
-            <div className="text-sm font-bold leading-tight">InventoryPro</div>
-            <div className="text-[10px] text-muted-foreground">Stock by Barcode + Serial Number</div>
+            <div className="text-sm font-bold leading-tight">DFCL-IT</div>
+            <div className="text-[10px] text-muted-foreground">(Test System)</div>
           </div>
         </div>
         <div className="flex-1" />
@@ -141,7 +141,7 @@ export function AppShell() {
       </div>
 
       <footer className="border-t py-3 px-4 text-xs text-muted-foreground text-center">
-        InventoryPro © 2026 — Barcode & Serial-based Stock Management System
+        DFCL-IT (Test System) © 2026 — Idea & Developed by Abdur Rahman Akash · WhatsApp: 01534955065
       </footer>
     </div>
   )

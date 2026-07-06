@@ -72,7 +72,7 @@ export function exportToPDF(title: string, rows: any[], columns?: { key: string;
     </head>
     <body>
       <div class="header">
-        <div class="logo">📊 InventoryPro</div>
+        <div class="logo">📊 DFCL-IT (Test System)</div>
         <div class="meta">Generated: ${now}</div>
       </div>
       <h1>${title}</h1>
@@ -81,7 +81,7 @@ export function exportToPDF(title: string, rows: any[], columns?: { key: string;
         <thead><tr>${cols.map((c) => `<th>${c.label}</th>`).join('')}</tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
-      <div class="footer">InventoryPro © 2026 — Barcode & Serial-based Stock Management System</div>
+      <div class="footer">DFCL-IT (Test System) © 2026 — Idea & Developed by Abdur Rahman Akash · WhatsApp: 01534955065</div>
       <div class="no-print" style="margin-top: 24px; text-align: center;">
         <button onclick="window.print()" style="padding: 8px 16px; background: #1a1a1a; color: white; border: none; border-radius: 4px; cursor: pointer;">🖨️ Print / Save as PDF</button>
       </div>

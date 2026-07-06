@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InventoryPro - Stock Management by Barcode & Serial",
-  description: "Full inventory management system with barcode & serial tracking. Purchase, Sales, Inventory, Accounts & Reports modules.",
-  keywords: ["inventory", "stock management", "barcode", "serial number", "purchase", "sales"],
-  authors: [{ name: "InventoryPro" }],
+  title: "DFCL-IT (Test System) - Stock Management",
+  description: "Barcode & Serial-based Stock Management System. Idea & Developed by Abdur Rahman Akash.",
+  keywords: ["DFCL-IT", "inventory", "stock management", "barcode", "serial number"],
+  authors: [{ name: "Abdur Rahman Akash" }],
 };
 
 export default function RootLayout({
