@@ -4,12 +4,12 @@ import { create } from 'zustand'
 export type ModuleKey =
   | 'dashboard'
   | 'entities' | 'departments' | 'employees' | 'uoms' | 'suppliers' | 'categories' | 'items' | 'item-serials' | 'news-ticker'
-  | 'purchase-requisitions' | 'purchases' | 'purchase-returns'
-  | 'stock-all' | 'stock-mine' | 'internal-transfers' | 'adjustments'
+  | 'purchase-requisitions' | 'purchases' | 'purchase-returns' | 'purchase-receive'
+  | 'stock-all' | 'stock-mine' | 'internal-transfers' | 'internal-receive' | 'adjustments'
   | 'sales' | 'sales-delivery' | 'sales-returns' | 'sales-refunds'
   | 'accounts-expenses' | 'accounts-receive'
   | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
-  | 'manage-permissions' | 'employee-edit' | 'login-settings'
+  | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit'
 
 interface AppState {
   active: ModuleKey

@@ -44,6 +44,7 @@ export const SECTIONS: Section[] = [
       { key: 'purchase-requisitions', label: 'Purchase Requisition', icon: ClipboardList },
       { key: 'purchases', label: 'Purchase & Approval', icon: FileCheck2 },
       { key: 'purchase-returns', label: 'Purchase Return', icon: Undo2 },
+      { key: 'purchase-receive', label: 'Purchase Receive', icon: PackageCheck },
     ],
   },
   {
@@ -53,6 +54,7 @@ export const SECTIONS: Section[] = [
       { key: 'stock-all', label: 'All Entity Stock', icon: Warehouse },
       { key: 'stock-mine', label: 'My Entity Stock', icon: MapPin },
       { key: 'internal-transfers', label: 'Internal Transfer', icon: ArrowLeftRight },
+      { key: 'internal-receive', label: 'Internal Receive', icon: PackageCheck },
       { key: 'adjustments', label: 'Adjustment & Approval', icon: Sliders },
     ],
   },

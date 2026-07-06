@@ -47,6 +47,9 @@ export function ResourcePage({
   deleteWarning,
   enablePagination = true,    // enable server-side pagination
   pageSize = 20,               // records per page
+  onCustomAdd,                 // override default Add behavior
+  onCustomEdit,                // override default Edit behavior
+  fields = [],                 // make fields optional (pages with custom edit don't need them)
 }: {
   slug: any
   title: string
@@ -64,6 +67,9 @@ export function ResourcePage({
   deleteWarning?: string
   enablePagination?: boolean
   pageSize?: number
+  onCustomAdd?: () => void
+  onCustomEdit?: (row: any) => void
+  fields?: FieldDef[]
 }) {
   const { hasPerm } = useAuth()
   const permModule = moduleKey || (slug as string)
@@ -131,10 +137,12 @@ export function ResourcePage({
   }, [debouncedQ])
 
   const onAdd = () => {
+    if (onCustomAdd) { onCustomAdd(); return }
     setEditing(null)
     setOpen(true)
   }
   const onEdit = (row: any) => {
+    if (onCustomEdit) { onCustomEdit(row); return }
     setEditing(row)
     setOpen(true)
   }

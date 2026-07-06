@@ -18,10 +18,12 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'purchase-requisitions', label: 'Purchase Requisition', section: 'Purchase' },
   { key: 'purchases', label: 'Purchase & Approval', section: 'Purchase' },
   { key: 'purchase-returns', label: 'Purchase Return', section: 'Purchase' },
+  { key: 'purchase-receive', label: 'Purchase Receive', section: 'Purchase' },
   // Inventory
   { key: 'stock-all', label: 'All Entity Stock', section: 'Inventory' },
   { key: 'stock-mine', label: 'My Entity Stock', section: 'Inventory' },
   { key: 'internal-transfers', label: 'Internal Transfer', section: 'Inventory' },
+  { key: 'internal-receive', label: 'Internal Receive', section: 'Inventory' },
   { key: 'adjustments', label: 'Adjustment', section: 'Inventory' },
   // Sales
   { key: 'sales', label: 'Sales', section: 'Sales' },

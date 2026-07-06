@@ -111,6 +111,17 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'returnNo', autoNumberPrefix: 'PRT',
   },
+  'purchase-receives': {
+    model: 'purchaseReceive',
+    include: {
+      purchase: { select: { id: true, purchaseNo: true } },
+      entity: { select: { id: true, name: true } },
+      items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
+    },
+    listSelect: { id: true, receiveNo: true, purchaseId: true, entityId: true, receiveDate: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdAt: true },
+    writable: true, updatable: true, deletable: true,
+    autoNumberField: 'receiveNo', autoNumberPrefix: 'PRC',
+  },
   // Inventory
   'internal-transfers': {
     model: 'internalTransfer',
@@ -122,6 +133,17 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     listSelect: { id: true, transferNo: true, fromEntityId: true, toEntityId: true, transferDate: true, status: true, receivedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'transferNo', autoNumberPrefix: 'IT',
+  },
+  'internal-receives': {
+    model: 'internalReceive',
+    include: {
+      transfer: { select: { id: true, transferNo: true } },
+      entity: { select: { id: true, name: true } },
+      items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
+    },
+    listSelect: { id: true, receiveNo: true, transferId: true, entityId: true, receiveDate: true, status: true, notes: true, createdAt: true },
+    writable: true, updatable: true, deletable: true,
+    autoNumberField: 'receiveNo', autoNumberPrefix: 'IR',
   },
   'adjustments': {
     model: 'adjustment',

@@ -16,8 +16,8 @@ import {
 // Resources that have an entityId field (need entity filtering for non-admin)
 const ENTITY_FILTERED_RESOURCES = new Set([
   'entities', 'departments', 'employees', 'suppliers',
-  'purchase-requisitions', 'purchases', 'purchase-returns',
-  'internal-transfers', 'adjustments', 'stock-transactions',
+  'purchase-requisitions', 'purchases', 'purchase-returns', 'purchase-receives',
+  'internal-transfers', 'internal-receives', 'adjustments', 'stock-transactions',
   'sales', 'sales-returns', 'sales-refunds',
   'account-entries', 'item-serials',
 ])

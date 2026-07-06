@@ -24,9 +24,11 @@ import { NewsTickerPage } from '@/components/modules/NewsTickerPage'
 import { PurchaseRequisitionsPage } from '@/components/modules/PurchaseRequisitionsPage'
 import { PurchasesPage } from '@/components/modules/PurchasesPage'
 import { PurchaseReturnsPage } from '@/components/modules/PurchaseReturnsPage'
+import { PurchaseReceivePage } from '@/components/modules/PurchaseReceivePage'
 import { StockAllPage } from '@/components/modules/StockAllPage'
 import { StockMinePage } from '@/components/modules/StockMinePage'
 import { InternalTransfersPage } from '@/components/modules/InternalTransfersPage'
+import { InternalReceivePage } from '@/components/modules/InternalReceivePage'
 import { AdjustmentsPage } from '@/components/modules/AdjustmentsPage'
 import { SalesPage } from '@/components/modules/SalesPage'
 import { SalesDeliveryPage } from '@/components/modules/SalesDeliveryPage'
@@ -42,6 +44,7 @@ import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
 import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPage'
 import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
 import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
+import { ItemEditPage } from '@/components/modules/ItemEditPage'
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
@@ -223,9 +226,11 @@ function ModuleRouter({ active }: { active: any }) {
     case 'purchase-requisitions': return <PurchaseRequisitionsPage />
     case 'purchases': return <PurchasesPage />
     case 'purchase-returns': return <PurchaseReturnsPage />
+    case 'purchase-receive': return <PurchaseReceivePage />
     case 'stock-all': return <StockAllPage />
     case 'stock-mine': return <StockMinePage />
     case 'internal-transfers': return <InternalTransfersPage />
+    case 'internal-receive': return <InternalReceivePage />
     case 'adjustments': return <AdjustmentsPage />
     case 'sales': return <SalesPage />
     case 'sales-delivery': return <SalesDeliveryPage />
@@ -241,6 +246,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'manage-permissions': return <ManagePermissionsPage />
     case 'employee-edit': return <EmployeeEditPage />
     case 'login-settings': return <LoginSettingsPage />
+    case 'item-edit': return <ItemEditPage />
     default: return <Dashboard />
   }
 }

@@ -39,6 +39,8 @@ model Entity {
   transfersFrom     InternalTransfer[] @relation("TransferFrom")
   transfersTo       InternalTransfer[] @relation("TransferTo")
   userEntities      UserEntity[]
+  purchaseReceives  PurchaseReceive[]
+  internalReceives  InternalReceive[]
 
   @@index([parentId])
   @@index([isActive])
@@ -187,6 +189,8 @@ model Item {
   stockTransactions  StockTransaction[]
   internalTransferItems InternalTransferItem[]
   adjustmentItems    AdjustmentItem[]
+  purchaseReceiveItems PurchaseReceiveItem[]
+  internalReceiveItems InternalReceiveItem[]
 
   @@index([categoryId])
   @@index([uomId])
@@ -233,6 +237,84 @@ model Setting {
   value     String   // JSON string or plain value
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============ PURCHASE RECEIVE MODULE ============
+
+// When a Purchase is approved, items are received via PurchaseReceive.
+// Each receive generates auto barcodes (format: yymmdd+7digits) and optional serials.
+// Partial receives are allowed — each receive gets a unique receive ID.
+model PurchaseReceive {
+  id            String   @id @default(cuid())
+  receiveNo     String   @unique   // e.g. PRC-20260706-00001
+  purchaseId    String
+  purchase      Purchase @relation(fields: [purchaseId], references: [id])
+  entityId      String   // which entity is receiving
+  entity        Entity   @relation(fields: [entityId], references: [id])
+  receiveDate   DateTime @default(now())
+  status        String   @default("PENDING") // PENDING, APPROVED
+  approvedBy    String?
+  approvedAt    DateTime?
+  notes         String?
+  items         PurchaseReceiveItem[]
+  createdAt     DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([entityId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Each line item in a purchase receive — qty received + barcodes + serials
+model PurchaseReceiveItem {
+  id              String   @id @default(cuid())
+  receiveId       String
+  receive         PurchaseReceive @relation(fields: [receiveId], references: [id])
+  purchaseItemId  String   // reference to original PurchaseItem
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+  quantity        Float    // qty received in this batch
+  barcodes        String   // comma-separated auto-generated barcodes (yymmdd+7digits each)
+  serials         String?  // comma-separated user-entered serial numbers (optional)
+
+  @@index([receiveId])
+  @@index([itemId])
+}
+
+// ============ INTERNAL RECEIVE MODULE ============
+
+// When InternalTransfer is sent, receiving entity confirms via InternalReceive.
+// Shows barcodes/serials for verification.
+model InternalReceive {
+  id            String   @id @default(cuid())
+  receiveNo     String   @unique
+  transferId    String
+  transfer      InternalTransfer @relation(fields: [transferId], references: [id])
+  entityId      String   // receiving entity
+  entity        Entity   @relation(fields: [entityId], references: [id])
+  receiveDate   DateTime @default(now())
+  status        String   @default("RECEIVED")
+  notes         String?
+  items         InternalReceiveItem[]
+  createdAt     DateTime @default(now())
+
+  @@index([transferId])
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+model InternalReceiveItem {
+  id          String   @id @default(cuid())
+  receiveId   String
+  receive     InternalReceive @relation(fields: [receiveId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  barcodes    String?  // barcodes received (from transfer)
+  serials     String?  // serials received (shown for verification)
+
+  @@index([receiveId])
+  @@index([itemId])
 }
 
 // ============ PURCHASE MODULE ============
@@ -288,6 +370,7 @@ model Purchase {
   notes           String?
   items           PurchaseItem[]
   returns         PurchaseReturn[]
+  receives        PurchaseReceive[]
   createdAt       DateTime @default(now())
 
   @@index([entityId])
@@ -376,6 +459,7 @@ model InternalTransfer {
   receivedAt    DateTime?
   notes         String?
   items         InternalTransferItem[]
+  receives      InternalReceive[]
   createdAt     DateTime @default(now())
 
   @@index([fromEntityId])
