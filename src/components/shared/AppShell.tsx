@@ -41,6 +41,7 @@ import { ReportsAccountsPage } from '@/components/modules/ReportsAccountsPage'
 import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
 import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPage'
 import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
+import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
@@ -239,6 +240,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'reports-serial': return <ReportsSerialPage />
     case 'manage-permissions': return <ManagePermissionsPage />
     case 'employee-edit': return <EmployeeEditPage />
+    case 'login-settings': return <LoginSettingsPage />
     default: return <Dashboard />
   }
 }

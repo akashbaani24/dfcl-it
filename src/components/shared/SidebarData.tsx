@@ -6,6 +6,7 @@ import {
   BadgeDollarSign, PackageCheck, RotateCcw,
   TrendingDown, TrendingUp,
   FileBarChart, ClipboardCheck, Tags, ScanLine,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { ModuleKey } from '@/lib/store'
 
@@ -33,6 +34,7 @@ export const SECTIONS: Section[] = [
       { key: 'items', label: 'Item (Barcode + Serial)', icon: Barcode },
       { key: 'item-serials', label: 'Item Serial Numbers', icon: ScanLine },
       { key: 'news-ticker', label: 'News Ticker', icon: Megaphone },
+  { key: 'login-settings', label: 'Login Image Settings', icon: ImageIcon },
     ],
   },
   {
