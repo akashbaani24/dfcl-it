@@ -95,8 +95,8 @@ model Department {
   id        String   @id @default(cuid())
   name      String
   shortCode String
-  entityId  String
-  entity    Entity   @relation(fields: [entityId], references: [id])
+  entityId  String?
+  entity    Entity?  @relation(fields: [entityId], references: [id])
   employees Employee[]
   createdAt DateTime @default(now())
 

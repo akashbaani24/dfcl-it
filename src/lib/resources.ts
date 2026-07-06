@@ -30,7 +30,6 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   },
   'departments': {
     model: 'department',
-    include: { entity: { select: { id: true, name: true, shortCode: true } } },
     listSelect: { id: true, name: true, shortCode: true, entityId: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },

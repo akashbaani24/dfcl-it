@@ -19,7 +19,7 @@ import { useApp } from '@/lib/store'
 
 export function EmployeesPage() {
   const { hasPerm } = useAuth()
-  const { openPermissions } = useApp()
+  const { openPermissions, setActive } = useApp()
   const canCreate = hasPerm('employees', 'canCreate' as PermissionAction)
   const canEdit = hasPerm('employees', 'canEdit' as PermissionAction)
   const canDelete = hasPerm('employees', 'canDelete' as PermissionAction)
@@ -78,8 +78,16 @@ export function EmployeesPage() {
     load()
   }, [load])
 
-  const onAdd = () => { setEditing(null); setOpen(true) }
-  const onEdit = (row: any) => { setEditing(row); setOpen(true) }
+  const onAdd = () => {
+    // Navigate to new employee page (not popup)
+    sessionStorage.removeItem('editingEmployeeId')
+    setActive('employee-edit')
+  }
+  const onEdit = (row: any) => {
+    // Navigate to separate edit page (not popup)
+    sessionStorage.setItem('editingEmployeeId', row.id)
+    setActive('employee-edit')
+  }
   const onDelete = async (row: any) => {
     if (!confirm('Delete this employee?')) return
     try {

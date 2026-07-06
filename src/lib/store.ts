@@ -9,7 +9,7 @@ export type ModuleKey =
   | 'sales' | 'sales-delivery' | 'sales-returns' | 'sales-refunds'
   | 'accounts-expenses' | 'accounts-receive'
   | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
-  | 'manage-permissions'
+  | 'manage-permissions' | 'employee-edit'
 
 interface AppState {
   active: ModuleKey
