@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
   const slug = searchParams.get('slug')
   const id = searchParams.get('id')
   const search = searchParams.get('search') || undefined
+  // Pagination params
+  const page = parseInt(searchParams.get('page') || '1', 10)
+  const limit = parseInt(searchParams.get('limit') || '0', 10) // 0 = no limit (backward compat)
+  const paginated = searchParams.get('paginate') === '1'
+
   if (!slug || !RESOURCES[slug]) {
     return NextResponse.json({ error: 'Unknown resource' }, { status: 400 })
   }
@@ -35,7 +40,6 @@ export async function GET(req: NextRequest) {
   const model = db[cfg.model]
 
   // Entity access control — only fetch user if this resource needs entity filtering
-  // (skip for admin-only resources like uoms, categories, items, news-ticker — they're global)
   let entityFilter: string[] | null = null
   if (ENTITY_FILTERED_RESOURCES.has(slug)) {
     const currentUser = await getCurrentUser()
@@ -62,6 +66,8 @@ export async function GET(req: NextRequest) {
         where.OR = [{ name: { contains: search } }, { shortCode: { contains: search } }]
       } else if (slug === 'employees') {
         where.OR = [{ name: { contains: search } }, { employeeCode: { contains: search } }]
+      } else if (slug === 'item-serials') {
+        where.OR = [{ serialNumber: { contains: search } }, { barcode: { contains: search } }]
       } else {
         where.name = { contains: search }
       }
@@ -81,9 +87,35 @@ export async function GET(req: NextRequest) {
       }
     } else if (entityFilter && entityFilter.length === 0 && ENTITY_FILTERED_RESOURCES.has(slug)) {
       // Non-admin with no entity assignments — return empty
+      if (paginated) {
+        return NextResponse.json({ data: [], total: 0, page, limit, totalPages: 0 })
+      }
       return NextResponse.json([])
     }
 
+    // If pagination is requested, return paginated response with metadata
+    if (paginated && limit > 0) {
+      const skip = (page - 1) * limit
+      const [rows, total] = await Promise.all([
+        model.findMany({
+          where,
+          include: cfg.include,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        model.count({ where }),
+      ])
+      return NextResponse.json({
+        data: rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      })
+    }
+
+    // Default: return all (backward compatible with existing UI)
     const rows = await model.findMany({ where, include: cfg.include, orderBy: { createdAt: 'desc' } })
     return NextResponse.json(rows)
   } catch (e: any) {

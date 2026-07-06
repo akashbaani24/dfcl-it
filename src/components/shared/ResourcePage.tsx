@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { FormDialog, FieldDef } from '@/components/shared/FormDialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Pencil, Trash2, FileSpreadsheet, FileText } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Pencil, Trash2, FileSpreadsheet, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { list, create, update, remove } from '@/lib/api'
 import { toast } from 'sonner'
 import { useAuth } from '@/lib/auth-store'
@@ -17,6 +18,16 @@ export type Col = {
   label: string
   render?: (row: any) => React.ReactNode
   className?: string
+}
+
+// Debounce hook — delays calling a function until user stops typing
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
 }
 
 export function ResourcePage({
@@ -32,8 +43,10 @@ export function ResourcePage({
   filter,
   defaultValues,
   moduleKey,
-  onDataChange,  // called after create/update/delete so parent can refresh
-  deleteWarning,  // custom warning message shown in delete confirmation
+  onDataChange,
+  deleteWarning,
+  enablePagination = true,    // enable server-side pagination
+  pageSize = 20,               // records per page
 }: {
   slug: any
   title: string
@@ -49,6 +62,8 @@ export function ResourcePage({
   moduleKey?: string
   onDataChange?: () => void
   deleteWarning?: string
+  enablePagination?: boolean
+  pageSize?: number
 }) {
   const { hasPerm } = useAuth()
   const permModule = moduleKey || (slug as string)
@@ -64,25 +79,56 @@ export function ResourcePage({
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
   const [q, setQ] = useState('')
+  const debouncedQ = useDebounce(q, 400) // 400ms debounce
+
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { ...(filter || {}) }
-      if (q) params.search = q
-      const r = await list(slug, params)
-      setRows(r as any[])
-      setFiltered(r as any[])
+      const params: Record<string, string> = { ...(filter || {}) }
+      if (debouncedQ) params.search = debouncedQ
+
+      if (enablePagination) {
+        params.paginate = '1'
+        params.page = String(page)
+        params.limit = String(pageSize)
+        const r: any = await list(slug, params)
+        if (r && Array.isArray(r)) {
+          // Backward compat: some endpoints return array directly
+          setRows(r)
+          setFiltered(r)
+          setTotal(r.length)
+          setTotalPages(1)
+        } else if (r && r.data) {
+          setRows(r.data)
+          setFiltered(r.data)
+          setTotal(r.total || 0)
+          setTotalPages(r.totalPages || 0)
+        }
+      } else {
+        const r = await list(slug, params)
+        setRows(r as any[])
+        setFiltered(r as any[])
+      }
     } catch (e: any) {
       toast.error(e.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [slug, q, JSON.stringify(filter)])
+  }, [slug, debouncedQ, JSON.stringify(filter), enablePagination, page, pageSize])
 
   useEffect(() => {
     load()
   }, [load])
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    if (page !== 1) setPage(1)
+  }, [debouncedQ])
 
   const onAdd = () => {
     setEditing(null)
@@ -103,13 +149,11 @@ export function ResourcePage({
       load()
       onDataChange?.()
     } catch (e: any) {
-      // Try to parse JSON error message (API returns {error: "message"})
       let msg = e.message || 'Failed to delete'
       try {
         const parsed = JSON.parse(msg)
         if (parsed.error) msg = parsed.error
       } catch {}
-      // Show as error toast — Bengali messages will display correctly
       toast.error(msg, { duration: 6000 })
     }
   }
@@ -126,28 +170,13 @@ export function ResourcePage({
     onDataChange?.()
   }
 
-  // Build export columns from `columns` (skip render-only fields — use raw row value)
   const exportColumns = columns.map((c) => ({ key: c.key, label: c.label }))
 
   const onExcel = () => {
-    const exportRows = filtered.map((r) => {
-      const flat: any = {}
-      for (const c of columns) {
-        flat[c.key] = r[c.key]
-      }
-      return flat
-    })
-    exportToCSV(title.replace(/\s+/g, '_'), exportRows, exportColumns)
+    exportToCSV(title.replace(/\s+/g, '_'), filtered, exportColumns)
   }
   const onPDF = () => {
-    const exportRows = filtered.map((r) => {
-      const flat: any = {}
-      for (const c of columns) {
-        flat[c.key] = r[c.key]
-      }
-      return flat
-    })
-    exportToPDF(title, exportRows, exportColumns)
+    exportToPDF(title, filtered, exportColumns)
   }
 
   return (
@@ -159,7 +188,7 @@ export function ResourcePage({
         addLabel={addLabel}
         onSearch={(v) => setQ(v)}
       />
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         {canExcel && (
           <Button variant="outline" size="sm" onClick={onExcel} className="gap-1">
             <FileSpreadsheet className="h-4 w-4" /> Excel
@@ -171,9 +200,29 @@ export function ResourcePage({
           </Button>
         )}
         {extraControls}
+        {loading && <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>}
+        {enablePagination && total > 0 && !loading && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {total} records {totalPages > 1 && `· Page ${page} of ${totalPages}`}
+          </span>
+        )}
       </div>
+
       {loading ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
+        // Skeleton loader
+        <Card>
+          <CardContent className="p-0">
+            <div className="p-4 space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  {columns.slice(0, 5).map((_, j) => (
+                    <Skeleton key={j} className="h-4 flex-1" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       ) : filtered.length === 0 ? (
         <EmptyState title="No records found" hint={canCreate ? 'Add a new record to get started' : undefined} />
       ) : (
@@ -216,6 +265,33 @@ export function ResourcePage({
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination controls */}
+            {enablePagination && totalPages > 1 && (
+              <div className="flex items-center justify-between p-3 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="gap-1"
+                >
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -39,6 +39,10 @@ model Entity {
   transfersFrom     InternalTransfer[] @relation("TransferFrom")
   transfersTo       InternalTransfer[] @relation("TransferTo")
   userEntities      UserEntity[]
+
+  @@index([parentId])
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 // ============ USER AUTH ============
@@ -95,6 +99,8 @@ model Department {
   entity    Entity   @relation(fields: [entityId], references: [id])
   employees Employee[]
   createdAt DateTime @default(now())
+
+  @@index([entityId])
 }
 
 model Employee {
@@ -111,6 +117,11 @@ model Employee {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   user         User?
+
+  @@index([entityId])
+  @@index([departmentId])
+  @@index([employeeCode])
+  @@index([isActive])
 }
 
 
@@ -134,6 +145,9 @@ model Supplier {
   entity    Entity   @relation(fields: [entityId], references: [id])
   purchases Purchase[]
   createdAt DateTime @default(now())
+
+  @@index([entityId])
+  @@index([shortCode])
 }
 
 model Category {
@@ -146,6 +160,9 @@ model Category {
   isActive   Boolean    @default(true)
   items      Item[]
   createdAt  DateTime   @default(now())
+
+  @@index([parentId])
+  @@index([isActive])
 }
 
 model Item {
@@ -170,6 +187,11 @@ model Item {
   stockTransactions  StockTransaction[]
   internalTransferItems InternalTransferItem[]
   adjustmentItems    AdjustmentItem[]
+
+  @@index([categoryId])
+  @@index([uomId])
+  @@index([hasSerial])
+  @@index([createdAt])
 }
 
 // Individual serial numbers per item - tracks each physical unit
@@ -188,6 +210,12 @@ model ItemSerial {
   updatedAt     DateTime @updatedAt
 
   @@unique([itemId, serialNumber])
+  @@index([entityId])
+  @@index([status])
+  @@index([serialNumber])
+  @@index([barcode])
+  @@index([purchaseId])
+  @@index([saleId])
 }
 
 model NewsTicker {
@@ -214,6 +242,10 @@ model PurchaseRequisition {
   approvedAt  DateTime?
   items       PurchaseRequisitionItem[]
   createdAt   DateTime @default(now())
+
+  @@index([entityId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model PurchaseRequisitionItem {
@@ -224,6 +256,9 @@ model PurchaseRequisitionItem {
   item           Item     @relation(fields: [itemId], references: [id])
   quantity       Float
   notes          String?
+
+  @@index([requisitionId])
+  @@index([itemId])
 }
 
 model Purchase {
@@ -245,6 +280,12 @@ model Purchase {
   items           PurchaseItem[]
   returns         PurchaseReturn[]
   createdAt       DateTime @default(now())
+
+  @@index([entityId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([purchaseDate])
+  @@index([createdAt])
 }
 
 model PurchaseItem {
@@ -257,6 +298,9 @@ model PurchaseItem {
   unitPrice   Float
   totalPrice  Float
   serials     String?  // comma-separated serial numbers entered for this line
+
+  @@index([purchaseId])
+  @@index([itemId])
 }
 
 model PurchaseReturn {
@@ -269,6 +313,9 @@ model PurchaseReturn {
   totalAmount Float    @default(0)
   items       PurchaseReturnItem[]
   createdAt   DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([createdAt])
 }
 
 model PurchaseReturnItem {
@@ -281,6 +328,9 @@ model PurchaseReturnItem {
   unitPrice   Float
   totalPrice  Float
   serials     String?
+
+  @@index([returnId])
+  @@index([itemId])
 }
 
 // ============ INVENTORY MODULE ============
@@ -297,6 +347,12 @@ model StockTransaction {
   refId         String?
   serials       String?  // comma-separated serials
   createdAt     DateTime @default(now())
+
+  @@index([itemId])
+  @@index([entityId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([refType, refId])
 }
 
 model InternalTransfer {
@@ -312,6 +368,11 @@ model InternalTransfer {
   notes         String?
   items         InternalTransferItem[]
   createdAt     DateTime @default(now())
+
+  @@index([fromEntityId])
+  @@index([toEntityId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model InternalTransferItem {
@@ -322,6 +383,9 @@ model InternalTransferItem {
   item       Item     @relation(fields: [itemId], references: [id])
   quantity   Float
   serials    String?
+
+  @@index([transferId])
+  @@index([itemId])
 }
 
 model Adjustment {
@@ -337,6 +401,10 @@ model Adjustment {
   approvedAt  DateTime?
   items       AdjustmentItem[]
   createdAt   DateTime @default(now())
+
+  @@index([entityId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model AdjustmentItem {
@@ -347,6 +415,9 @@ model AdjustmentItem {
   item        Item     @relation(fields: [itemId], references: [id])
   quantity    Float
   serials     String?
+
+  @@index([adjustmentId])
+  @@index([itemId])
 }
 
 // ============ SALES MODULE ============
@@ -370,6 +441,12 @@ model Sales {
   returns       SalesReturn[]
   refunds       SalesRefund[]
   createdAt     DateTime @default(now())
+
+  @@index([entityId])
+  @@index([status])
+  @@index([deliveryStatus])
+  @@index([salesDate])
+  @@index([createdAt])
 }
 
 model SalesItem {
@@ -382,6 +459,9 @@ model SalesItem {
   unitPrice   Float
   totalPrice  Float
   serials     String?  // comma-separated serials delivered
+
+  @@index([salesId])
+  @@index([itemId])
 }
 
 model SalesReturn {
@@ -395,6 +475,9 @@ model SalesReturn {
   items       SalesReturnItem[]
   refunds     SalesRefund[]
   createdAt   DateTime @default(now())
+
+  @@index([salesId])
+  @@index([createdAt])
 }
 
 model SalesReturnItem {
@@ -407,6 +490,9 @@ model SalesReturnItem {
   unitPrice   Float
   totalPrice  Float
   serials     String?
+
+  @@index([returnId])
+  @@index([itemId])
 }
 
 model SalesRefund {
@@ -421,6 +507,10 @@ model SalesRefund {
   method      String   @default("CASH") // CASH, BANK, MOBILE
   notes       String?
   createdAt   DateTime @default(now())
+
+  @@index([salesId])
+  @@index([returnId])
+  @@index([createdAt])
 }
 
 // ============ ACCOUNTS MODULE ============
@@ -439,4 +529,10 @@ model AccountEntry {
   refType     String?
   refId       String?
   createdAt   DateTime @default(now())
+
+  @@index([entityId])
+  @@index([type])
+  @@index([category])
+  @@index([date])
+  @@index([createdAt])
 }
