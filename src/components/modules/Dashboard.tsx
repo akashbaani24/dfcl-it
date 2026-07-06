@@ -3,12 +3,10 @@ import { useEffect, useState } from 'react'
 import { useApp } from '@/lib/store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { list } from '@/lib/api'
-import { usePrefetch, PREFETCH_DASHBOARD } from '@/lib/prefetch'
 import { ShoppingCart, BadgeDollarSign, AlertCircle, Package, TrendingDown, TrendingUp } from 'lucide-react'
 
 export function Dashboard() {
   const { setActive } = useApp()
-  const { prefetchMultiple } = usePrefetch()
   const [stats, setStats] = useState({
     purchases: 0,
     sales: 0,
@@ -34,10 +32,7 @@ export function Dashboard() {
         receives: (rcv as any[]).length,
       })
     }).catch(() => {})
-
-    // Prefetch common resources so navigation feels instant
-    prefetchMultiple(PREFETCH_DASHBOARD)
-  }, [prefetchMultiple])
+  }, [])
 
   return (
     <div>

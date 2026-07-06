@@ -4,10 +4,10 @@ import { RESOURCES } from '@/lib/resources'
 
 const API = '/api/resource'
 
-// Simple in-memory cache with TTL (10 seconds default — balances freshness with performance)
+// Simple in-memory cache with TTL (3 seconds — short enough to stay fresh, long enough to dedupe rapid calls)
 type CacheEntry = { data: any; expires: number; promise?: Promise<any> }
 const cache = new Map<string, CacheEntry>()
-const DEFAULT_TTL = 10000 // 10 seconds (increased from 5s for better navigation speed)
+const DEFAULT_TTL = 3000 // 3 seconds
 
 // Dedup in-flight requests — if same URL is being fetched, wait for existing promise
 const inflight = new Map<string, Promise<any>>()
