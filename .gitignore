@@ -31,10 +31,26 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.local
+.env.production
+.env.*.local
+# .env.example কমিট করা হবে
+!.env.example
 
 # vercel
 .vercel
+
+# database (local SQLite)
+/db/*.db
+/db/*.db-journal
+/upload/
+
+# z-scripts & internal
+/.zscripts/
+/.claude/
+/.z-ai-config/
+/worklog.md
 
 
 # typescript
