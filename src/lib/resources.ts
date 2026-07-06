@@ -79,6 +79,11 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     model: 'newsTicker',
     writable: true, updatable: true, deletable: true,
   },
+  'account-types': {
+    model: 'accountType',
+    listSelect: { id: true, name: true, type: true, isActive: true, createdAt: true },
+    writable: true, updatable: true, deletable: true,
+  },
   // Purchase
   'purchase-requisitions': {
     model: 'purchaseRequisition',

@@ -14,6 +14,8 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'items', label: 'Item', section: 'Company Setup' },
   { key: 'item-serials', label: 'Item Serial Numbers', section: 'Company Setup' },
   { key: 'news-ticker', label: 'News Ticker', section: 'Company Setup' },
+  { key: 'login-settings', label: 'Login Image Settings', section: 'Company Setup' },
+  { key: 'account-types', label: 'Account Type Setup', section: 'Company Setup' },
   // Purchase
   { key: 'purchase-requisitions', label: 'Purchase Requisition', section: 'Purchase' },
   { key: 'purchases', label: 'Purchase & Approval', section: 'Purchase' },

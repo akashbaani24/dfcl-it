@@ -35,6 +35,7 @@ export const SECTIONS: Section[] = [
       { key: 'item-serials', label: 'Item Serial Numbers', icon: ScanLine },
       { key: 'news-ticker', label: 'News Ticker', icon: Megaphone },
   { key: 'login-settings', label: 'Login Image Settings', icon: ImageIcon },
+  { key: 'account-types', label: 'Account Type Setup', icon: Tags },
     ],
   },
   {

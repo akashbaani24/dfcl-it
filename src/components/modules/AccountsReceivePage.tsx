@@ -1,6 +1,6 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
-import { FormDialog, FieldDef } from '@/components/shared/FormDialog'
+import { FieldDef } from '@/components/shared/FormDialog'
 import { Badge } from '@/components/shared/PageHeader'
 import { useEffect, useState } from 'react'
 import { list } from '@/lib/api'
@@ -15,11 +15,15 @@ const columns: Col[] = [
   { key: 'amount', label: 'Amount', render: (r) => `৳${r.amount.toFixed(2)}`, className: 'text-right' },
 ]
 
-const RECEIVE_CATEGORIES = ['SALES_PAYMENT', 'REFUND_RECEIVED', 'ADVANCE', 'DEPOSIT', 'OTHER_INCOME']
-
 export function AccountsReceivePage() {
   const [entities, setEntities] = useState<any[]>([])
-  useEffect(() => { list('entities').then((r) => setEntities(r as any[])).catch(() => {}) }, [])
+  const [receiveTypes, setReceiveTypes] = useState<any[]>([])
+
+  useEffect(() => {
+    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
+    list('account-types', { type: 'RECEIVE' }).then((r) => setReceiveTypes(r as any[])).catch(() => {})
+  }, [])
+
   const fields: FieldDef[] = [
     {
       name: 'entityId', label: 'Entity', type: 'select', required: true,
@@ -27,7 +31,8 @@ export function AccountsReceivePage() {
     },
     {
       name: 'category', label: 'Receive Type', type: 'select', required: true,
-      options: RECEIVE_CATEGORIES.map((c) => ({ value: c, label: c })),
+      options: receiveTypes.map((t) => ({ value: t.name, label: t.name })),
+      help: 'Manage types from Company Setup → Account Type Setup',
     },
     { name: 'amount', label: 'Amount (৳)', type: 'number', required: true, default: 0 },
     { name: 'date', label: 'Date', type: 'date', required: true, default: new Date().toISOString().slice(0, 10) },
@@ -41,11 +46,12 @@ export function AccountsReceivePage() {
     },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
   ]
+
   return (
     <ResourcePage
       slug="account-entries"
       title="Daily Receive"
-      description="Record money received — sales payments, deposits, etc."
+      description="Record money received. Types are managed from Company Setup → Account Type Setup."
       fields={fields}
       columns={columns}
       addLabel="Add Receive"

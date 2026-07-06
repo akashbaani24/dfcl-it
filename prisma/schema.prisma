@@ -239,6 +239,20 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
+// Account types — user-defined categories for expenses and receives
+// type: "EXPENSE" or "RECEIVE"
+model AccountType {
+  id        String   @id @default(cuid())
+  name      String   // e.g. "RENT", "SALARY", "SALES_PAYMENT"
+  type      String   // EXPENSE or RECEIVE
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([name, type])
+  @@index([type])
+  @@index([isActive])
+}
+
 // ============ PURCHASE RECEIVE MODULE ============
 
 // When a Purchase is approved, items are received via PurchaseReceive.

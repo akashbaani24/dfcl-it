@@ -45,6 +45,7 @@ import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPag
 import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
 import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
 import { ItemEditPage } from '@/components/modules/ItemEditPage'
+import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
@@ -247,6 +248,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'employee-edit': return <EmployeeEditPage />
     case 'login-settings': return <LoginSettingsPage />
     case 'item-edit': return <ItemEditPage />
+    case 'account-types': return <AccountTypesPage />
     default: return <Dashboard />
   }
 }
