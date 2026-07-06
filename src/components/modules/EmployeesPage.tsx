@@ -237,11 +237,9 @@ export function EmployeesPage() {
                               <Button variant="ghost" size="icon" className="h-7 w-7" title={row.user ? 'Edit Login' : 'Create Login'} onClick={() => openLoginDialog(row)}>
                                 <KeyRound className="h-3.5 w-3.5" />
                               </Button>
-                              {row.user && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" title="Manage Permissions (opens separate page)" onClick={() => handleManagePermissions(row)}>
-                                  <ShieldCheck className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title={row.user ? 'Manage Permissions (opens separate page)' : 'Create login first to manage permissions'} onClick={() => handleManagePermissions(row)}>
+                                <ShieldCheck className="h-3.5 w-3.5" />
+                              </Button>
                             </>
                           )}
                           {canEdit && (

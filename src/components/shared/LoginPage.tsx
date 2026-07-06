@@ -188,21 +188,6 @@ export function LoginPage() {
               )}
             </Button>
           </form>
-
-          {/* Demo credentials hint */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-3 text-center font-semibold">Demo Accounts</div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                <div className="text-[#3b5bdb] font-semibold text-xs mb-0.5">👑 Admin</div>
-                <div className="text-slate-500 font-mono text-[10px]">admin / admin123</div>
-              </div>
-              <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                <div className="text-[#5c7cfa] font-semibold text-xs mb-0.5">💼 Sales</div>
-                <div className="text-slate-500 font-mono text-[10px]">sales / sales123</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Mobile-only footer */}
