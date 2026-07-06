@@ -67,4 +67,4 @@ prompt
 
 server.log
 # Skills directory
-/skills/
+/skills/scripts/vercel-set-env.sh
