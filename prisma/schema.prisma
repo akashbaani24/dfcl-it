@@ -1,0 +1,393 @@
+// Inventory Management System - Prisma Schema
+// Stock maintained by Barcode + Product Serial Number
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ COMPANY SETUP ============
+
+model Entity {
+  id         String   @id @default(cuid())
+  name       String
+  shortCode  String   @unique
+  parentId   String?
+  parent     Entity?  @relation("EntityHierarchy", fields: [parentId], references: [id])
+  children   Entity[] @relation("EntityHierarchy")
+  address    String?
+  phone      String?
+  email      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  departments       Department[]
+  employees         Employee[]
+  suppliers         Supplier[]
+  purchaseReqs      PurchaseRequisition[]
+  purchases         Purchase[]
+  sales             Sales[]
+  stockTransactions StockTransaction[]
+  adjustments       Adjustment[]
+  expenses          AccountEntry[]
+  itemSerials       ItemSerial[]
+  transfersFrom     InternalTransfer[] @relation("TransferFrom")
+  transfersTo       InternalTransfer[] @relation("TransferTo")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  shortCode String
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id])
+  employees Employee[]
+  createdAt DateTime @default(now())
+}
+
+model Employee {
+  id           String   @id @default(cuid())
+  name         String
+  employeeCode String
+  designation  String?
+  phone        String?
+  email        String?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  entityId     String
+  entity       Entity   @relation(fields: [entityId], references: [id])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model UoM {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  shortCode String   @unique
+  isActive  Boolean  @default(true)
+  items     Item[]
+  createdAt DateTime @default(now())
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  shortCode String
+  phone     String?
+  email     String?
+  address   String?
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id])
+  purchases Purchase[]
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id         String     @id @default(cuid())
+  name       String
+  shortCode  String
+  parentId   String?
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  isActive   Boolean    @default(true)
+  items      Item[]
+  createdAt  DateTime   @default(now())
+}
+
+model Item {
+  id           String   @id @default(cuid())
+  name         String
+  itemCode     String   @unique
+  barcode      String   @unique
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  uomId        String
+  uom          UoM      @relation(fields: [uomId], references: [id])
+  hasSerial    Boolean  @default(false) // if true, individual serial tracking
+  description  String?
+  createdAt    DateTime @default(now())
+
+  serials            ItemSerial[]
+  purchaseReqItems   PurchaseRequisitionItem[]
+  purchaseItems      PurchaseItem[]
+  purchaseReturnItems PurchaseReturnItem[]
+  salesItems         SalesItem[]
+  salesReturnItems   SalesReturnItem[]
+  stockTransactions  StockTransaction[]
+  internalTransferItems InternalTransferItem[]
+  adjustmentItems    AdjustmentItem[]
+}
+
+// Individual serial numbers per item - tracks each physical unit
+model ItemSerial {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          Item     @relation(fields: [itemId], references: [id])
+  serialNumber  String   // the serial printed on product body
+  barcode       String?  // optional per-unit barcode
+  entityId      String   // current holder entity
+  entity        Entity   @relation(fields: [entityId], references: [id])
+  status        String   @default("IN_STOCK") // IN_STOCK, SOLD, RETURNED, DAMAGED
+  purchaseId    String?
+  saleId        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([itemId, serialNumber])
+}
+
+model NewsTicker {
+  id        String   @id @default(cuid())
+  message   String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// ============ PURCHASE MODULE ============
+
+model PurchaseRequisition {
+  id          String   @id @default(cuid())
+  reqNo       String   @unique
+  entityId    String
+  entity      Entity   @relation(fields: [entityId], references: [id])
+  requestDate DateTime @default(now())
+  requiredDate DateTime?
+  requestedBy String?
+  notes       String?
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED, CONVERTED
+  approvedBy  String?
+  approvedAt  DateTime?
+  items       PurchaseRequisitionItem[]
+  createdAt   DateTime @default(now())
+}
+
+model PurchaseRequisitionItem {
+  id             String   @id @default(cuid())
+  requisitionId  String
+  requisition    PurchaseRequisition @relation(fields: [requisitionId], references: [id])
+  itemId         String
+  item           Item     @relation(fields: [itemId], references: [id])
+  quantity       Float
+  notes          String?
+}
+
+model Purchase {
+  id              String   @id @default(cuid())
+  purchaseNo      String   @unique
+  entityId        String
+  entity          Entity   @relation(fields: [entityId], references: [id])
+  supplierId      String
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+  requisitionId   String?
+  purchaseDate    DateTime @default(now())
+  invoiceNo       String?
+  totalAmount     Float    @default(0)
+  status          String   @default("PENDING") // PENDING, APPROVED, RECEIVED, RETURNED
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdBy       String?
+  notes           String?
+  items           PurchaseItem[]
+  returns         PurchaseReturn[]
+  createdAt       DateTime @default(now())
+}
+
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  totalPrice  Float
+  serials     String?  // comma-separated serial numbers entered for this line
+}
+
+model PurchaseReturn {
+  id          String   @id @default(cuid())
+  returnNo    String   @unique
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id])
+  returnDate  DateTime @default(now())
+  reason      String?
+  totalAmount Float    @default(0)
+  items       PurchaseReturnItem[]
+  createdAt   DateTime @default(now())
+}
+
+model PurchaseReturnItem {
+  id          String   @id @default(cuid())
+  returnId    String
+  return      PurchaseReturn @relation(fields: [returnId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  totalPrice  Float
+  serials     String?
+}
+
+// ============ INVENTORY MODULE ============
+
+model StockTransaction {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          Item     @relation(fields: [itemId], references: [id])
+  entityId      String
+  entity        Entity   @relation(fields: [entityId], references: [id])
+  type          String   // PURCHASE, SALE, TRANSFER_IN, TRANSFER_OUT, ADJUSTMENT_IN, ADJUSTMENT_OUT, RETURN_IN, RETURN_OUT
+  quantity      Float    // positive for in, negative for out
+  refType       String?  // PURCHASE, SALES, TRANSFER, ADJUSTMENT
+  refId         String?
+  serials       String?  // comma-separated serials
+  createdAt     DateTime @default(now())
+}
+
+model InternalTransfer {
+  id            String   @id @default(cuid())
+  transferNo    String   @unique
+  fromEntityId  String
+  fromEntity    Entity   @relation("TransferFrom", fields: [fromEntityId], references: [id])
+  toEntityId    String
+  toEntity      Entity   @relation("TransferTo", fields: [toEntityId], references: [id])
+  transferDate  DateTime @default(now())
+  status        String   @default("PENDING") // PENDING, RECEIVED, CANCELLED
+  receivedAt    DateTime?
+  notes         String?
+  items         InternalTransferItem[]
+  createdAt     DateTime @default(now())
+}
+
+model InternalTransferItem {
+  id         String   @id @default(cuid())
+  transferId String
+  transfer   InternalTransfer @relation(fields: [transferId], references: [id])
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id])
+  quantity   Float
+  serials    String?
+}
+
+model Adjustment {
+  id          String   @id @default(cuid())
+  adjustNo    String   @unique
+  entityId    String
+  entity      Entity   @relation(fields: [entityId], references: [id])
+  adjustDate  DateTime @default(now())
+  type        String   // INCREASE, DECREASE
+  reason      String?
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedBy  String?
+  approvedAt  DateTime?
+  items       AdjustmentItem[]
+  createdAt   DateTime @default(now())
+}
+
+model AdjustmentItem {
+  id          String   @id @default(cuid())
+  adjustmentId String
+  adjustment  Adjustment @relation(fields: [adjustmentId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  serials     String?
+}
+
+// ============ SALES MODULE ============
+
+model Sales {
+  id            String   @id @default(cuid())
+  salesNo       String   @unique
+  entityId      String
+  entity        Entity   @relation(fields: [entityId], references: [id])
+  customerName  String
+  customerPhone String?
+  customerAddress String?
+  salesDate     DateTime @default(now())
+  deliveryDate  DateTime?
+  totalAmount   Float    @default(0)
+  paidAmount    Float    @default(0)
+  status        String   @default("PENDING") // PENDING, DELIVERED, RETURNED, REFUNDED
+  deliveryStatus String  @default("PENDING") // PENDING, DELIVERED
+  notes         String?
+  items         SalesItem[]
+  returns       SalesReturn[]
+  refunds       SalesRefund[]
+  createdAt     DateTime @default(now())
+}
+
+model SalesItem {
+  id          String   @id @default(cuid())
+  salesId     String
+  sales       Sales    @relation(fields: [salesId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  totalPrice  Float
+  serials     String?  // comma-separated serials delivered
+}
+
+model SalesReturn {
+  id          String   @id @default(cuid())
+  returnNo    String   @unique
+  salesId     String
+  sales       Sales    @relation(fields: [salesId], references: [id])
+  returnDate  DateTime @default(now())
+  reason      String?
+  totalAmount Float    @default(0)
+  items       SalesReturnItem[]
+  refunds     SalesRefund[]
+  createdAt   DateTime @default(now())
+}
+
+model SalesReturnItem {
+  id          String   @id @default(cuid())
+  returnId    String
+  return      SalesReturn @relation(fields: [returnId], references: [id])
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  totalPrice  Float
+  serials     String?
+}
+
+model SalesRefund {
+  id          String   @id @default(cuid())
+  refundNo    String   @unique
+  salesId     String
+  sales       Sales    @relation(fields: [salesId], references: [id])
+  returnId    String?
+  return      SalesReturn? @relation(fields: [returnId], references: [id])
+  refundDate  DateTime @default(now())
+  amount      Float
+  method      String   @default("CASH") // CASH, BANK, MOBILE
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+// ============ ACCOUNTS MODULE ============
+
+model AccountEntry {
+  id          String   @id @default(cuid())
+  entryNo     String   @unique
+  entityId    String
+  entity      Entity   @relation(fields: [entityId], references: [id])
+  type        String   // EXPENSE, RECEIVE
+  category    String   // e.g. RENT, SALARY, UTILITIES, SALES_PAYMENT, OTHER
+  amount      Float
+  date        DateTime @default(now())
+  description String?
+  method      String   @default("CASH") // CASH, BANK, MOBILE
+  refType     String?
+  refId       String?
+  createdAt   DateTime @default(now())
+}

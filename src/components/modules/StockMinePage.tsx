@@ -1,0 +1,131 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { stockView, list } from '@/lib/api'
+import { ScanLine, Barcode, MapPin } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+
+export function StockMinePage() {
+  const [data, setData] = useState<any[]>([])
+  const [entities, setEntities] = useState<any[]>([])
+  const [entityId, setEntityId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [viewing, setViewing] = useState<any>(null)
+
+  useEffect(() => { list('entities').then((r) => setEntities(r as any[])).catch(() => {}) }, [])
+
+  const load = async () => {
+    if (!entityId) return
+    setLoading(true)
+    try {
+      const r = await stockView(entityId, false, true)
+      setData(r)
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { if (entityId) load() }, [entityId])
+
+  return (
+    <div>
+      <PageHeader
+        title="My Entity Stock"
+        description="Stock currently held by a specific entity (branch/showroom/warehouse)"
+      />
+      <div className="mb-3 flex items-end gap-3">
+        <div>
+          <Label className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" /> Select Your Entity</Label>
+          <Select value={entityId} onValueChange={setEntityId}>
+            <SelectTrigger className="w-64 mt-1"><SelectValue placeholder="Select entity" /></SelectTrigger>
+            <SelectContent>
+              {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name} ({e.shortCode})</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {entityId && <Button onClick={load} variant="outline" size="sm">Refresh</Button>}
+      </div>
+
+      {!entityId ? (
+        <EmptyState title="Select an entity" hint="Choose your entity to see its stock" />
+      ) : loading ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
+      ) : data.filter((r) => r.balance > 0).length === 0 ? (
+        <EmptyState title="No stock at this entity" />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card z-10">
+                  <TableRow>
+                    <TableHead>Item Code</TableHead>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead>Serials In Stock</TableHead>
+                    <TableHead className="text-right">View</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.filter((r) => r.balance > 0).map((r) => (
+                    <TableRow key={r.item.id}>
+                      <TableCell className="font-mono text-xs">{r.item.itemCode}</TableCell>
+                      <TableCell className="font-mono text-xs"><Barcode className="h-3 w-3 inline mr-1" />{r.item.barcode}</TableCell>
+                      <TableCell>{r.item.name}</TableCell>
+                      <TableCell>{r.item.category?.name}</TableCell>
+                      <TableCell className="text-right font-bold">{r.balance}</TableCell>
+                      <TableCell>
+                        {r.item.hasSerial ? (
+                          <span className="text-xs inline-flex items-center gap-1 text-emerald-700">
+                            <ScanLine className="h-3 w-3" /> {r.serials?.length || 0} serial(s)
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {r.item.hasSerial && r.serials?.length > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => setViewing(r)}>View</Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Serials — {viewing?.item?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="border rounded-md overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Serial Number</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {viewing?.serials?.map((s: any) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-mono">{s.serialNumber}</TableCell>
+                    <TableCell><Badge status={s.status} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
