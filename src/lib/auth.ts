@@ -16,6 +16,7 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'news-ticker', label: 'News Ticker', section: 'Company Setup' },
   { key: 'login-settings', label: 'Login Image Settings', section: 'Company Setup' },
   { key: 'account-types', label: 'Account Type Setup', section: 'Company Setup' },
+  { key: 'bank-infos', label: 'Bank Info', section: 'Company Setup' },
   // Purchase
   { key: 'purchase-requisitions', label: 'Purchase Requisition', section: 'Purchase' },
   { key: 'purchases', label: 'Purchase & Approval', section: 'Purchase' },

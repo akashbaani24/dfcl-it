@@ -84,6 +84,11 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     listSelect: { id: true, name: true, type: true, isActive: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
+  'bank-infos': {
+    model: 'bankInfo',
+    listSelect: { id: true, bankName: true, accountName: true, accountNumber: true, branch: true, routingNumber: true, swiftCode: true, isActive: true, createdAt: true },
+    writable: true, updatable: true, deletable: true,
+  },
   // Purchase
   'purchase-requisitions': {
     model: 'purchaseRequisition',

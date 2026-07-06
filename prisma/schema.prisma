@@ -253,6 +253,21 @@ model AccountType {
   @@index([isActive])
 }
 
+// Bank information — used in sales payments, expenses, receives
+model BankInfo {
+  id            String   @id @default(cuid())
+  bankName      String   // e.g. "Dutch-Bangla Bank Ltd"
+  accountName   String   // e.g. "DFCL-IT Pvt Ltd"
+  accountNumber String   // e.g. "1234567890123"
+  branch        String?  // e.g. "Gulshan Branch"
+  routingNumber String?  // optional
+  swiftCode     String?  // optional
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([isActive])
+}
+
 // ============ PURCHASE RECEIVE MODULE ============
 
 // When a Purchase is approved, items are received via PurchaseReceive.

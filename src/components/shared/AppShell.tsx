@@ -46,6 +46,7 @@ import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
 import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
 import { ItemEditPage } from '@/components/modules/ItemEditPage'
 import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
+import { BankInfosPage } from '@/components/modules/BankInfosPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
 export function AppShell() {
@@ -250,6 +251,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'login-settings': return <LoginSettingsPage />
     case 'item-edit': return <ItemEditPage />
     case 'account-types': return <AccountTypesPage />
+    case 'bank-infos': return <BankInfosPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
   }

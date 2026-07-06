@@ -36,6 +36,7 @@ export const SECTIONS: Section[] = [
       { key: 'news-ticker', label: 'News Ticker', icon: Megaphone },
   { key: 'login-settings', label: 'Login Image Settings', icon: ImageIcon },
   { key: 'account-types', label: 'Account Type Setup', icon: Tags },
+  { key: 'bank-infos', label: 'Bank Info', icon: Tags },
     ],
   },
   {
