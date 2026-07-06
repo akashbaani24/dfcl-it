@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth-server'
+import { getCurrentUserFull } from '@/lib/auth-server'
 
 export async function GET() {
-  const user = await getCurrentUser()
+  const user = await getCurrentUserFull()
   if (!user) return NextResponse.json({ user: null })
   return NextResponse.json({
     id: user.id,

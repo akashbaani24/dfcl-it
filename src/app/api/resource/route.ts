@@ -30,11 +30,14 @@ export async function GET(req: NextRequest) {
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]
 
-  // Entity access control
-  const currentUser = await getCurrentUser()
+  // Entity access control — only fetch user if this resource needs entity filtering
+  // (skip for admin-only resources like uoms, categories, items, news-ticker — they're global)
   let entityFilter: string[] | null = null
-  if (currentUser && currentUser.role !== 'ADMIN') {
-    entityFilter = await getUserEntityIds(currentUser.id)
+  if (ENTITY_FILTERED_RESOURCES.has(slug)) {
+    const currentUser = await getCurrentUser()
+    if (currentUser && currentUser.role !== 'ADMIN') {
+      entityFilter = await getUserEntityIds(currentUser.id)
+    }
   }
 
   try {

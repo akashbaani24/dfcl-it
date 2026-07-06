@@ -51,6 +51,28 @@ export async function getCurrentUser() {
   if (!token) return null
   const userId = decodeSession(token)
   if (!userId) return null
+  // Lightweight query: only fetch what's needed for auth check
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      isActive: true,
+      employeeId: true,
+    },
+  })
+  if (!user || !user.isActive) return null
+  return user
+}
+
+// Full user info (with employee, permissions, entities) — only when needed (e.g. /me endpoint)
+export async function getCurrentUserFull() {
+  const store = await cookies()
+  const token = store.get(SESSION_COOKIE)?.value
+  if (!token) return null
+  const userId = decodeSession(token)
+  if (!userId) return null
   const user = await db.user.findUnique({
     where: { id: userId },
     include: { employee: true, permissions: true, userEntities: { include: { entity: true } } },
