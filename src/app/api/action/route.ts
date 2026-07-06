@@ -62,8 +62,9 @@ export async function POST(req: NextRequest) {
       }
 
       case 'create-purchase-receive': {
-        // Frontend sends: extra.items = [{ purchaseItemId, itemId, quantity, units: [{barcode, serial}] }]
-        // Each unit has its own auto-generated barcode + optional serial (from product body)
+        // Frontend sends: extra.items = [{ purchaseItemId, itemId, quantity, serials }]
+        // 1 barcode per receive batch (not per unit)
+        // Serials: from product body, optional, no qty connection
         const purchase = await db.purchase.findUnique({
           where: { id },
           include: { entity: true, items: { include: { item: true } } },
@@ -78,35 +79,22 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'No items to receive' }, { status: 400 })
         }
 
-        // Check for duplicate serials (against existing DB + within this receive)
-        const allSerialsToCheck: string[] = []
+        // Check for duplicate serials (within this receive + against DB)
         for (const it of itemsPayload) {
-          if (it.units && Array.isArray(it.units)) {
-            for (const u of it.units) {
-              if (u.serial && u.serial.trim()) {
-                allSerialsToCheck.push(u.serial.trim())
-              }
+          if (it.serials && it.serials.trim()) {
+            const sns = it.serials.split(',').map((s: string) => s.trim()).filter(Boolean)
+            // Check duplicates within this item's serials
+            const unique = new Set(sns)
+            if (unique.size !== sns.length) {
+              return NextResponse.json({ error: `Duplicate serial numbers detected for an item. Each serial must be unique.` }, { status: 400 })
             }
-          }
-        }
-        // Check duplicates within this receive
-        const serialSet = new Set(allSerialsToCheck)
-        if (serialSet.size !== allSerialsToCheck.length) {
-          return NextResponse.json({ error: 'Duplicate serial numbers detected. Each serial must be unique.' }, { status: 400 })
-        }
-        // Check duplicates against existing DB
-        if (allSerialsToCheck.length > 0) {
-          for (const sn of allSerialsToCheck) {
-            // Find which item this serial belongs to
-            const itemWithSerial = itemsPayload.find((it: any) =>
-              it.units?.some((u: any) => u.serial?.trim() === sn)
-            )
-            if (itemWithSerial) {
+            // Check against existing DB
+            for (const sn of sns) {
               const existing = await db.itemSerial.findUnique({
-                where: { itemId_serialNumber: { itemId: itemWithSerial.itemId, serialNumber: sn } },
+                where: { itemId_serialNumber: { itemId: it.itemId, serialNumber: sn } },
               })
               if (existing) {
-                return NextResponse.json({ error: `Serial number "${sn}" already exists in the system. Duplicate serial not allowed.` }, { status: 400 })
+                return NextResponse.json({ error: `Serial number "${sn}" already exists in the system.` }, { status: 400 })
               }
             }
           }
@@ -120,21 +108,16 @@ export async function POST(req: NextRequest) {
         const ts = Date.now().toString().slice(-6)
         const receiveNo = `PRC-${yy}${mm}${dd}-${ts}`
 
-        // Build line items: barcodes + serials from per-unit arrays
+        // Build line items: 1 barcode per batch + optional serials
         const lineItems = itemsPayload
           .filter((it: any) => it.quantity > 0)
-          .map((it: any) => {
-            const units = it.units || []
-            const barcodes = units.map((u: any) => u.barcode).filter(Boolean)
-            const serials = units.map((u: any) => u.serial?.trim()).filter(Boolean)
-            return {
-              purchaseItemId: it.purchaseItemId,
-              itemId: it.itemId,
-              quantity: it.quantity,
-              barcodes: barcodes.join(','),
-              serials: serials.length > 0 ? serials.join(',') : null,
-            }
-          })
+          .map((it: any) => ({
+            purchaseItemId: it.purchaseItemId,
+            itemId: it.itemId,
+            quantity: it.quantity,
+            barcodes: generateBarcode(),  // 1 barcode per receive batch
+            serials: it.serials || null,
+          }))
 
         if (lineItems.length === 0) {
           return NextResponse.json({ error: 'No items to receive' }, { status: 400 })
@@ -175,17 +158,33 @@ export async function POST(req: NextRequest) {
         }
 
         for (const it of receive.items) {
-          const barcodes: string[] = it.barcodes ? it.barcodes.split(',').map((s) => s.trim()).filter(Boolean) : []
+          // 1 barcode per batch
+          const barcode = it.barcodes || generateBarcode()
+          // Serials from product body (optional, may be 0, 1, or many — no qty connection)
           const serials: string[] = it.serials ? it.serials.split(',').map((s) => s.trim()).filter(Boolean) : []
 
-          // Create an ItemSerial for each unit.
-          // If serial exists (from product body), use it as serialNumber.
-          // If serial is empty, use barcode as the serialNumber (for tracking).
-          for (let i = 0; i < barcodes.length; i++) {
-            const barcode = barcodes[i]
-            const userSerial = serials[i] || ''  // may be empty
-            // Use user-provided serial if available, otherwise use barcode as identifier
-            const serialNumber = userSerial || `BC-${barcode}`
+          if (serials.length > 0) {
+            // Create ItemSerial for each user-provided serial
+            for (const sn of serials) {
+              const existing = await db.itemSerial.findUnique({
+                where: { itemId_serialNumber: { itemId: it.itemId, serialNumber: sn } },
+              })
+              if (!existing) {
+                await db.itemSerial.create({
+                  data: {
+                    itemId: it.itemId,
+                    serialNumber: sn,
+                    barcode,
+                    entityId: receive.entityId,
+                    status: 'IN_STOCK',
+                    purchaseId: receive.purchaseId,
+                  },
+                })
+              }
+            }
+          } else {
+            // No serials — create 1 ItemSerial with barcode as identifier
+            const serialNumber = `BC-${barcode}`
             const existing = await db.itemSerial.findUnique({
               where: { itemId_serialNumber: { itemId: it.itemId, serialNumber } },
             })
@@ -200,20 +199,10 @@ export async function POST(req: NextRequest) {
                   purchaseId: receive.purchaseId,
                 },
               })
-            } else {
-              await db.itemSerial.update({
-                where: { id: existing.id },
-                data: {
-                  barcode: existing.barcode || barcode,
-                  entityId: receive.entityId,
-                  status: 'IN_STOCK',
-                  purchaseId: receive.purchaseId,
-                },
-              })
             }
           }
 
-          // Stock transaction (positive)
+          // Stock transaction (positive qty)
           await db.stockTransaction.create({
             data: {
               itemId: it.itemId,
