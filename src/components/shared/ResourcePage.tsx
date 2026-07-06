@@ -34,7 +34,7 @@ export function ResourcePage({
   slug,
   title,
   description,
-  fields,
+  fields = [],
   columns,
   addLabel = 'Add New',
   searchField = 'search',
@@ -49,12 +49,11 @@ export function ResourcePage({
   pageSize = 20,               // records per page
   onCustomAdd,                 // override default Add behavior
   onCustomEdit,                // override default Edit behavior
-  fields = [],                 // make fields optional (pages with custom edit don't need them)
 }: {
   slug: any
   title: string
   description?: string
-  fields: FieldDef[]
+  fields?: FieldDef[]
   columns: Col[]
   addLabel?: string
   searchField?: string
