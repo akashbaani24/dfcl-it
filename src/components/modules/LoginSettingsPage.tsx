@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Upload, Trash2, Save, Image as ImageIcon, Smartphone, Monitor, Both } from 'lucide-react'
+import { Upload, Trash2, Save, Image as ImageIcon, Smartphone, Monitor, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function LoginSettingsPage() {
@@ -126,7 +126,7 @@ export function LoginSettingsPage() {
                 <SelectContent>
                   <SelectItem value="both">
                     <div className="flex items-center gap-2">
-                      <Both className="h-4 w-4" /> Both (Mobile + Desktop)
+                      <LayoutGrid className="h-4 w-4" /> Both (Mobile + Desktop)
                     </div>
                   </SelectItem>
                   <SelectItem value="desktop">
