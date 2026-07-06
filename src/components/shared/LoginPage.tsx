@@ -52,26 +52,24 @@ export function LoginPage() {
       {/* Main container: two columns on desktop, stacked on mobile */}
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
 
-        {/* ============ LEFT: Robot Illustration (desktop only) ============ */}
-        <div className="hidden lg:flex flex-col items-center justify-center">
-          <RobotIllustration />
-          <div className="mt-6 text-center">
-            <h2 className="text-white text-2xl font-bold mb-2 drop-shadow-lg">
+        {/* ============ LEFT: Robot Illustration ============ */}
+        <div className="flex flex-col items-center justify-center order-1 lg:order-1">
+          {/* Mobile: smaller robot, Desktop: full size */}
+          <div className="scale-75 lg:scale-100 origin-center">
+            <RobotIllustration />
+          </div>
+          <div className="mt-4 lg:mt-6 text-center">
+            <h2 className="text-white text-xl lg:text-2xl font-bold mb-1 lg:mb-2 drop-shadow-lg">
               DFCL-IT
             </h2>
-            <p className="text-blue-100 text-sm max-w-xs">
+            <p className="text-blue-100 text-xs lg:text-sm max-w-xs hidden sm:block">
               Barcode & Serial-based Stock Management System — your smart inventory buddy!
             </p>
           </div>
         </div>
 
         {/* ============ RIGHT: Login Card ============ */}
-        <div className="w-full max-w-md mx-auto">
-          {/* Mobile title */}
-          <h1 className="lg:hidden text-white text-xl font-bold mb-4 text-center tracking-wide drop-shadow-lg">
-            DFCL-IT (Test System)
-          </h1>
-
+        <div className="w-full max-w-md mx-auto order-2 lg:order-2">
           <div className="bg-[#0F172A] rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-700/50">
             {/* Avatar / Logo */}
             <div className="flex justify-center mb-5">
