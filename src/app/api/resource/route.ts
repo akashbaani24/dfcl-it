@@ -96,14 +96,20 @@ export async function GET(req: NextRequest) {
     // If pagination is requested, return paginated response with metadata
     if (paginated && limit > 0) {
       const skip = (page - 1) * limit
+      // Use listSelect for lighter payload when available
+      const queryOptions: any = {
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }
+      if (cfg.listSelect) {
+        queryOptions.select = { ...cfg.listSelect, ...cfg.include }
+      } else {
+        queryOptions.include = cfg.include
+      }
       const [rows, total] = await Promise.all([
-        model.findMany({
-          where,
-          include: cfg.include,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
+        model.findMany(queryOptions),
         model.count({ where }),
       ])
       return NextResponse.json({
@@ -116,7 +122,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: return all (backward compatible with existing UI)
-    const rows = await model.findMany({ where, include: cfg.include, orderBy: { createdAt: 'desc' } })
+    const queryOptions: any = {
+      where,
+      orderBy: { createdAt: 'desc' },
+    }
+    if (cfg.listSelect) {
+      queryOptions.select = { ...cfg.listSelect, ...cfg.include }
+    } else {
+      queryOptions.include = cfg.include
+    }
+    const rows = await model.findMany(queryOptions)
     return NextResponse.json(rows)
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

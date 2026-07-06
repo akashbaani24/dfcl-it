@@ -4,10 +4,13 @@ import { RESOURCES } from '@/lib/resources'
 
 const API = '/api/resource'
 
-// Simple in-memory cache with TTL (5 seconds default — short to stay fresh, long enough to dedupe rapid calls)
-type CacheEntry = { data: any; expires: number }
+// Simple in-memory cache with TTL (10 seconds default — balances freshness with performance)
+type CacheEntry = { data: any; expires: number; promise?: Promise<any> }
 const cache = new Map<string, CacheEntry>()
-const DEFAULT_TTL = 5000 // 5 seconds
+const DEFAULT_TTL = 10000 // 10 seconds (increased from 5s for better navigation speed)
+
+// Dedup in-flight requests — if same URL is being fetched, wait for existing promise
+const inflight = new Map<string, Promise<any>>()
 
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key)
@@ -35,11 +38,22 @@ export async function list<T = any>(slug: keyof typeof RESOURCES, params?: Recor
   const cacheKey = `${API}?${qs}`
   const cached = getCached<T[]>(cacheKey)
   if (cached) return cached
-  const r = await fetch(cacheKey)
-  if (!r.ok) throw new Error(await r.text())
-  const data = await r.json()
-  setCached(cacheKey, data, ttl)
-  return data
+  // Dedup in-flight requests
+  if (inflight.has(cacheKey)) {
+    return inflight.get(cacheKey)!
+  }
+  const promise = fetch(cacheKey).then(async (r) => {
+    if (!r.ok) throw new Error(await r.text())
+    const data = await r.json()
+    setCached(cacheKey, data, ttl)
+    inflight.delete(cacheKey)
+    return data
+  }).catch((e) => {
+    inflight.delete(cacheKey)
+    throw e
+  })
+  inflight.set(cacheKey, promise)
+  return promise
 }
 
 export async function getOne<T = any>(slug: keyof typeof RESOURCES, id: string): Promise<T> {

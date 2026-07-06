@@ -15,47 +15,65 @@ export type ResourceConfig = {
   updatable?: boolean
   // Allow delete
   deletable?: boolean
+  // Select only specific fields for LIST queries (reduces payload size)
+  // If not set, includes all fields + relations
+  listSelect?: Record<string, boolean>
 }
 
 export const RESOURCES: Record<string, ResourceConfig> = {
   // Company Setup
   'entities': {
     model: 'entity',
-    include: { parent: true },  // removed: children, departments, employees, suppliers (not needed for list view)
+    include: { parent: true },
+    listSelect: { id: true, name: true, shortCode: true, parentId: true, address: true, phone: true, email: true, isActive: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'departments': {
     model: 'department',
-    include: { entity: true },  // removed: employees (not needed for list view)
+    include: { entity: { select: { id: true, name: true, shortCode: true } } },
+    listSelect: { id: true, name: true, shortCode: true, entityId: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'employees': {
     model: 'employee',
-    include: { department: true, entity: true, user: true },  // removed: permissions (heavy, not needed for list)
+    include: {
+      department: { select: { id: true, name: true } },
+      entity: { select: { id: true, name: true } },
+      user: { select: { id: true, userId: true, role: true } },
+    },
+    listSelect: { id: true, name: true, employeeCode: true, designation: true, phone: true, email: true, departmentId: true, entityId: true, isActive: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'uoms': {
     model: 'uoM',
-    writable: true, updatable: true, deletable: true,  // removed: items (not needed for list view)
+    listSelect: { id: true, name: true, shortCode: true, isActive: true, createdAt: true },
+    writable: true, updatable: true, deletable: true,
   },
   'suppliers': {
     model: 'supplier',
-    include: { entity: true },
+    include: { entity: { select: { id: true, name: true } } },
+    listSelect: { id: true, name: true, shortCode: true, phone: true, email: true, address: true, entityId: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'categories': {
     model: 'category',
-    include: { parent: true, children: true },  // removed: items (heavy, not needed for list view)
+    include: { parent: { select: { id: true, name: true } } },
+    listSelect: { id: true, name: true, shortCode: true, parentId: true, isActive: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'items': {
     model: 'item',
-    include: { category: { include: { parent: true } }, uom: true },  // removed: serials (heavy, fetched on demand)
+    include: { category: { select: { id: true, name: true, parent: { select: { name: true } } } }, uom: { select: { id: true, shortCode: true } } },
+    listSelect: { id: true, name: true, itemCode: true, barcode: true, categoryId: true, uomId: true, hasSerial: true, description: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'item-serials': {
     model: 'itemSerial',
-    include: { item: true, entity: true },
+    include: {
+      item: { select: { id: true, name: true, itemCode: true } },
+      entity: { select: { id: true, name: true } },
+    },
+    listSelect: { id: true, itemId: true, serialNumber: true, barcode: true, entityId: true, status: true, purchaseId: true, saleId: true, createdAt: true, updatedAt: true },
     writable: true, updatable: true, deletable: true,
   },
   'news-ticker': {
@@ -65,62 +83,101 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   // Purchase
   'purchase-requisitions': {
     model: 'purchaseRequisition',
-    include: { entity: true, items: { include: { item: true } } },
+    include: {
+      entity: { select: { id: true, name: true } },
+      items: { select: { id: true, itemId: true, quantity: true } },
+    },
+    listSelect: { id: true, reqNo: true, entityId: true, requestDate: true, requiredDate: true, requestedBy: true, notes: true, status: true, approvedBy: true, approvedAt: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'reqNo', autoNumberPrefix: 'PR',
   },
   'purchases': {
     model: 'purchase',
-    include: { entity: true, supplier: true, items: { include: { item: true } } },
+    include: {
+      entity: { select: { id: true, name: true } },
+      supplier: { select: { id: true, name: true } },
+      items: { select: { id: true, itemId: true, quantity: true, unitPrice: true, totalPrice: true } },
+    },
+    listSelect: { id: true, purchaseNo: true, entityId: true, supplierId: true, requisitionId: true, purchaseDate: true, invoiceNo: true, totalAmount: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'purchaseNo', autoNumberPrefix: 'PO',
   },
   'purchase-returns': {
     model: 'purchaseReturn',
-    include: { purchase: true, items: { include: { item: true } } },
+    include: {
+      purchase: { select: { id: true, purchaseNo: true } },
+      items: { select: { id: true, itemId: true, quantity: true } },
+    },
+    listSelect: { id: true, returnNo: true, purchaseId: true, returnDate: true, reason: true, totalAmount: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'returnNo', autoNumberPrefix: 'PRT',
   },
   // Inventory
   'internal-transfers': {
     model: 'internalTransfer',
-    include: { fromEntity: true, toEntity: true, items: { include: { item: true } } },
+    include: {
+      fromEntity: { select: { id: true, name: true } },
+      toEntity: { select: { id: true, name: true } },
+      items: { select: { id: true, itemId: true, quantity: true } },
+    },
+    listSelect: { id: true, transferNo: true, fromEntityId: true, toEntityId: true, transferDate: true, status: true, receivedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'transferNo', autoNumberPrefix: 'IT',
   },
   'adjustments': {
     model: 'adjustment',
-    include: { entity: true, items: { include: { item: true } } },
+    include: {
+      entity: { select: { id: true, name: true } },
+      items: { select: { id: true, itemId: true, quantity: true } },
+    },
+    listSelect: { id: true, adjustNo: true, entityId: true, adjustDate: true, type: true, reason: true, status: true, approvedBy: true, approvedAt: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'adjustNo', autoNumberPrefix: 'ADJ',
   },
   'stock-transactions': {
     model: 'stockTransaction',
-    include: { item: true, entity: true },
+    include: {
+      item: { select: { id: true, name: true, itemCode: true } },
+      entity: { select: { id: true, name: true } },
+    },
+    listSelect: { id: true, itemId: true, entityId: true, type: true, quantity: true, refType: true, refId: true, serials: true, createdAt: true },
   },
   // Sales
   'sales': {
     model: 'sales',
-    include: { entity: true, items: { include: { item: true } }, returns: true, refunds: true },
+    include: {
+      entity: { select: { id: true, name: true } },
+      items: { select: { id: true, itemId: true, quantity: true, unitPrice: true, totalPrice: true } },
+    },
+    listSelect: { id: true, salesNo: true, entityId: true, customerName: true, customerPhone: true, customerAddress: true, salesDate: true, deliveryDate: true, totalAmount: true, paidAmount: true, status: true, deliveryStatus: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'salesNo', autoNumberPrefix: 'SO',
   },
   'sales-returns': {
     model: 'salesReturn',
-    include: { sales: true, items: { include: { item: true } }, refunds: true },
+    include: {
+      sales: { select: { id: true, salesNo: true } },
+      items: { select: { id: true, itemId: true, quantity: true } },
+    },
+    listSelect: { id: true, returnNo: true, salesId: true, returnDate: true, reason: true, totalAmount: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'returnNo', autoNumberPrefix: 'SR',
   },
   'sales-refunds': {
     model: 'salesRefund',
-    include: { sales: true, return: true },
+    include: {
+      sales: { select: { id: true, salesNo: true } },
+      return: { select: { id: true, returnNo: true } },
+    },
+    listSelect: { id: true, refundNo: true, salesId: true, returnId: true, refundDate: true, amount: true, method: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'refundNo', autoNumberPrefix: 'RF',
   },
   // Accounts
   'account-entries': {
     model: 'accountEntry',
-    include: { entity: true },
+    include: { entity: { select: { id: true, name: true } } },
+    listSelect: { id: true, entryNo: true, entityId: true, type: true, category: true, amount: true, date: true, description: true, method: true, refType: true, refId: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'entryNo', autoNumberPrefix: 'ACC',
   },

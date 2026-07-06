@@ -11,11 +11,18 @@ function createPrismaClient() {
   const tursoToken = process.env.TURSO_AUTH_TOKEN
 
   if (tursoUrl && tursoUrl.startsWith('libsql:') && tursoToken) {
+    // Optimized libsql client for high concurrency
     const libsql = createClient({
       url: tursoUrl,
       authToken: tursoToken,
-      // Performance: keep connection warm, allow multiple in-flight requests
-      concurrency: 10,
+      concurrency: 20,           // increased from 10 → 20 for more parallel queries
+      maxRetries: 3,             // retry on transient failures
+      retryDelay: 100,           // 100ms initial retry delay
+      syncInterval: 0,           // disable auto-sync (we don't use embedded replicas)
+      // Use HTTP/2 keep-alive for fewer connection overhead
+      fetchOptions: {
+        keepalive: true,
+      },
     })
     const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoToken })
     return new PrismaClient({ adapter, log: ['error'] })

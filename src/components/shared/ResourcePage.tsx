@@ -143,12 +143,18 @@ export function ResourcePage({
       ? `${deleteWarning}\n\nAre you sure to delete "${row.name || row.itemCode || row.shortCode || row.employeeCode || 'this record'}"?`
       : 'Are you sure to delete this record?'
     if (!confirm(confirmMsg)) return
+    // Optimistic UI: immediately remove from view
+    const prevRows = filtered
+    setFiltered((prev) => prev.filter((r) => r.id !== row.id))
+    setRows((prev) => prev.filter((r) => r.id !== row.id))
     try {
       await remove(slug, row.id)
       toast.success('Deleted successfully')
-      load()
       onDataChange?.()
     } catch (e: any) {
+      // Revert on failure
+      setFiltered(prevRows)
+      setRows(prevRows)
       let msg = e.message || 'Failed to delete'
       try {
         const parsed = JSON.parse(msg)
@@ -160,14 +166,35 @@ export function ResourcePage({
   const onSubmit = async (data: any) => {
     const payload = { ...defaultValues, ...data }
     if (editing) {
-      await update(slug, editing.id, payload)
-      toast.success('Updated')
+      // Optimistic: immediately update in view
+      setFiltered((prev) => prev.map((r) => r.id === editing.id ? { ...r, ...payload } : r))
+      setRows((prev) => prev.map((r) => r.id === editing.id ? { ...r, ...payload } : r))
+      try {
+        await update(slug, editing.id, payload)
+        toast.success('Updated')
+        onDataChange?.()
+      } catch (e: any) {
+        // Revert by reloading
+        load()
+        toast.error(e.message || 'Failed to update')
+      }
     } else {
-      await create(slug, payload)
-      toast.success('Created')
+      try {
+        const created = await create(slug, payload)
+        toast.success('Created')
+        // Add to top of list instantly
+        if (created) {
+          setFiltered((prev) => [created, ...prev])
+          setRows((prev) => [created, ...prev])
+        } else {
+          load()
+        }
+        onDataChange?.()
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to create')
+        load()
+      }
     }
-    load()
-    onDataChange?.()
   }
 
   const exportColumns = columns.map((c) => ({ key: c.key, label: c.label }))
