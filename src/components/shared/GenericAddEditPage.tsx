@@ -114,6 +114,11 @@ export function GenericAddEditPage({
         if (f.type === 'select' && payload[f.name] === '__NONE__') payload[f.name] = null
         if (f.type === 'number') payload[f.name] = Number(payload[f.name]) || 0
         if (f.type === 'switch') payload[f.name] = !!payload[f.name]
+        // Convert date fields to ISO-8601 DateTime (Prisma requires full datetime, not just date)
+        if (f.type === 'date' && payload[f.name]) {
+          // "2026-07-07" → "2026-07-07T00:00:00.000Z"
+          payload[f.name] = new Date(payload[f.name] + 'T00:00:00.000Z').toISOString()
+        }
       }
       if (editingId) {
         await update(slug as any, editingId, payload)
