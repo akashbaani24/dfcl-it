@@ -14,14 +14,16 @@ function createPrismaClient() {
     const libsql = createClient({
       url: tursoUrl,
       authToken: tursoToken,
+      // Performance: keep connection warm, allow multiple in-flight requests
+      concurrency: 10,
     })
     const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoToken })
-    return new PrismaClient({ adapter, log: ['error', 'warn'] })
+    return new PrismaClient({ adapter, log: ['error'] })
   }
 
   // Fallback: local SQLite
   return new PrismaClient({
-    log: process.env.NODE_ENV !== 'production' ? ['query', 'error', 'warn'] : ['error', 'warn'],
+    log: ['error'],
   })
 }
 

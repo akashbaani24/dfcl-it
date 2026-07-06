@@ -21,23 +21,22 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   // Company Setup
   'entities': {
     model: 'entity',
-    include: { parent: true, children: true, departments: true, employees: true, suppliers: true },
+    include: { parent: true },  // removed: children, departments, employees, suppliers (not needed for list view)
     writable: true, updatable: true, deletable: true,
   },
   'departments': {
     model: 'department',
-    include: { entity: true, employees: true },
+    include: { entity: true },  // removed: employees (not needed for list view)
     writable: true, updatable: true, deletable: true,
   },
   'employees': {
     model: 'employee',
-    include: { department: true, entity: true, user: { include: { permissions: true } } },
+    include: { department: true, entity: true, user: true },  // removed: permissions (heavy, not needed for list)
     writable: true, updatable: true, deletable: true,
   },
   'uoms': {
     model: 'uoM',
-    include: { items: true },
-    writable: true, updatable: true, deletable: true,
+    writable: true, updatable: true, deletable: true,  // removed: items (not needed for list view)
   },
   'suppliers': {
     model: 'supplier',
@@ -46,12 +45,12 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   },
   'categories': {
     model: 'category',
-    include: { parent: true, children: true, items: true },
+    include: { parent: true, children: true },  // removed: items (heavy, not needed for list view)
     writable: true, updatable: true, deletable: true,
   },
   'items': {
     model: 'item',
-    include: { category: { include: { parent: true } }, uom: true, serials: true },
+    include: { category: { include: { parent: true } }, uom: true },  // removed: serials (heavy, fetched on demand)
     writable: true, updatable: true, deletable: true,
   },
   'item-serials': {

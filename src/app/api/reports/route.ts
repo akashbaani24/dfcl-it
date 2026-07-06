@@ -1,4 +1,4 @@
-// Reports API
+// Reports API — OPTIMIZED (batch queries, no N+1)
 // GET /api/reports?type=stock-summary        -> per item/entity stock summary
 // GET /api/reports?type=stock-ledger&itemId=  -> stock ledger for item
 // GET /api/reports?type=purchase-summary     -> purchase totals per supplier/date
@@ -15,19 +15,26 @@ export async function GET(req: NextRequest) {
   try {
     switch (type) {
       case 'stock-summary': {
-        const entities = await db.entity.findMany()
-        const items = await db.item.findMany({ include: { category: { include: { parent: true } }, uom: true } })
+        // Single batch queries instead of nested loops
+        const [entities, items] = await Promise.all([
+          db.entity.findMany(),
+          db.item.findMany({ include: { category: { include: { parent: true } }, uom: true } }),
+        ])
+        // Single groupBy for ALL transactions grouped by (entityId, itemId)
+        const balancesRaw = await db.stockTransaction.groupBy({
+          by: ['entityId', 'itemId'],
+          _sum: { quantity: true },
+        })
+        const balanceMap: Record<string, number> = {}
+        for (const b of balancesRaw) {
+          balanceMap[`${b.entityId}|${b.itemId}`] = b._sum.quantity || 0
+        }
         const rows = []
         for (const e of entities) {
           for (const item of items) {
-            const txs = await db.stockTransaction.findMany({ where: { itemId: item.id, entityId: e.id } })
-            const balance = txs.reduce((s, t) => s + t.quantity, 0)
+            const balance = balanceMap[`${e.id}|${item.id}`] || 0
             if (balance !== 0) {
-              rows.push({
-                entity: e,
-                item,
-                balance,
-              })
+              rows.push({ entity: e, item, balance })
             }
           }
         }
@@ -44,7 +51,6 @@ export async function GET(req: NextRequest) {
           include: { item: true, entity: true },
           orderBy: { createdAt: 'asc' },
         })
-        // Compute running balance
         let running = 0
         const rows = txs.map((t) => {
           running += t.quantity
