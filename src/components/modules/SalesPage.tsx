@@ -1,36 +1,25 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useApp } from '@/lib/store'
 import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { ComboBox } from '@/components/ui/combobox'
-import { list, create, action } from '@/lib/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { list, action } from '@/lib/api'
 import { toast } from 'sonner'
-import { Eye, PackageCheck, ScanLine } from 'lucide-react'
-import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
+import { Eye, PackageCheck, Pencil } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 
 export function SalesPage() {
   const perm = usePerm('sales')
+  const { setActive } = useApp()
   const [rows, setRows] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
-  const [entities, setEntities] = useState<any[]>([])
-  const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
   const [viewing, setViewing] = useState<any>(null)
-  const [form, setForm] = useState({
-    entityId: '', customerName: '', customerPhone: '', customerAddress: '',
-    salesDate: new Date().toISOString().slice(0, 10), notes: '', paidAmount: 0,
-  })
-  const [lines, setLines] = useState<LineItem[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -40,8 +29,6 @@ export function SalesPage() {
 
   useEffect(() => {
     load()
-    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
-    list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
 
   useEffect(() => {
@@ -51,46 +38,13 @@ export function SalesPage() {
   }, [q, rows])
 
   const startNew = () => {
-    setForm({
-      entityId: '', customerName: '', customerPhone: '', customerAddress: '',
-      salesDate: new Date().toISOString().slice(0, 10), notes: '', paidAmount: 0,
-    })
-    setLines([])
-    setOpen(true)
+    sessionStorage.removeItem('editingSalesId')
+    setActive('sales-entry')
   }
 
-  const totalAmount = lines.reduce((s, l) => s + (l.totalPrice || 0), 0)
-
-  const save = async () => {
-    if (!form.entityId || !form.customerName) { toast.error('Entity & customer required'); return }
-    if (lines.length === 0) { toast.error('Add items'); return }
-    for (const l of lines) {
-      if (l.hasSerial) {
-        const sns = l.serials.split(',').map((s) => s.trim()).filter(Boolean)
-        if (sns.length === 0) {
-          toast.error(`Enter serial numbers for ${l.itemName}`)
-          return
-        }
-      }
-    }
-    try {
-      const s = await create('sales', {
-        entityId: form.entityId,
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
-        customerAddress: form.customerAddress,
-        salesDate: new Date(form.salesDate),
-        notes: form.notes,
-        totalAmount,
-        paidAmount: Number(form.paidAmount) || 0,
-        status: 'PENDING',
-        deliveryStatus: 'PENDING',
-        items: { create: lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, unitPrice: l.unitPrice, totalPrice: l.totalPrice, serials: l.serials || null })) },
-      })
-      toast.success(`Created ${s.salesNo}`)
-      setOpen(false)
-      load()
-    } catch (e: any) { toast.error(e.message) }
+  const startEdit = (row: any) => {
+    sessionStorage.setItem('editingSalesId', row.id)
+    setActive('sales-entry')
   }
 
   return (
@@ -161,7 +115,12 @@ export function SalesPage() {
                     <TableCell>{r.paidAmount.toFixed(2)}</TableCell>
                     <TableCell><Badge status={r.status} /></TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)} title="View"><Eye className="h-3.5 w-3.5" /></Button>
+                      {perm.canEdit && r.status === 'PENDING' && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)} title="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -170,44 +129,6 @@ export function SalesPage() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Sales Order</DialogTitle>
-            <DialogDescription>Enter items and the serial numbers physically being handed over to customer.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Selling Entity</Label>
-              <div className="mt-1">
-                <ComboBox
-                  value={form.entityId || ''}
-                  onChange={(v) => setForm({ ...form, entityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
-                  placeholder="Select entity"
-                />
-              </div>
-            </div>
-            <div><Label className="text-xs">Sales Date</Label><Input type="date" value={form.salesDate} onChange={(e) => setForm({ ...form, salesDate: e.target.value })} className="mt-1" /></div>
-            <div><Label className="text-xs">Customer Name</Label><Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} className="mt-1" /></div>
-            <div><Label className="text-xs">Customer Phone</Label><Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} className="mt-1" /></div>
-            <div className="sm:col-span-2"><Label className="text-xs">Customer Address</Label><Textarea value={form.customerAddress} onChange={(e) => setForm({ ...form, customerAddress: e.target.value })} className="mt-1" rows={2} /></div>
-            <div><Label className="text-xs">Paid Amount</Label><Input type="number" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: Number(e.target.value) })} className="mt-1" /></div>
-            <div className="sm:col-span-2"><Label className="text-xs">Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} /></div>
-          </div>
-          <div className="mt-3">
-            <Label className="text-xs flex items-center gap-1"><ScanLine className="h-3 w-3" /> Items & Serials</Label>
-            <div className="mt-1">
-              <LineItemEditor items={items} value={lines} onChange={setLines} showPrice={true} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save}>Create Sales Order</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">

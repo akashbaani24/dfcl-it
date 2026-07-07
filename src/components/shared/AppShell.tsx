@@ -49,6 +49,7 @@ import { ItemEditPage } from '@/components/modules/ItemEditPage'
 import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
 import { BankInfosPage } from '@/components/modules/BankInfosPage'
 import { PurchaseEntryPage } from '@/components/modules/PurchaseEntryPage'
+import { SalesEntryPage } from '@/components/modules/SalesEntryPage'
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
@@ -101,6 +102,7 @@ export function AppShell() {
         'accounts-receive', 'reports-stock', 'reports-purchase', 'reports-sales',
         'reports-accounts', 'reports-serial', 'manage-permissions',
         'purchase-entry',
+        'sales-entry',
       ]
       if (validModules.includes(hash)) {
         setTimeout(() => useApp.getState().setActive(hash as any), 0)
@@ -452,6 +454,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'account-types': return <AccountTypesPage />
     case 'bank-infos': return <BankInfosPage />
     case 'purchase-entry': return <PurchaseEntryPage />
+    case 'sales-entry': return <SalesEntryPage />
     case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
