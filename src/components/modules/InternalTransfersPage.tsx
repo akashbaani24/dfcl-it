@@ -20,7 +20,12 @@ export function InternalTransfersPage() {
   const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<any>(null)
-  const [challan, setChallan] = useState<any>(null)  // challan transfer (full detail)
+  const [challan, setChallan] = useState<any>(null)
+  // Receivers = users at the To Entity who can receive this transfer.
+  // Fetched when viewing a PENDING transfer. Auto-refreshes every 10s so
+  // newly-created users appear without manual refresh.
+  const [receivers, setReceivers] = useState<any[]>([])
+  const [receiversLoading, setReceiversLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,6 +66,42 @@ export function InternalTransfersPage() {
       setChallan(row)  // fallback to list row
     }
   }
+
+  // Fetch users at the To Entity who have receive rights (canCreate on
+  // 'internal-receive' module). Called when viewing a PENDING transfer.
+  // Also auto-refreshes every 10 seconds while the view dialog is open and
+  // the transfer is still PENDING — so newly-created users appear without
+  // manual refresh.
+  const fetchReceivers = useCallback(async (toEntityId: string) => {
+    setReceiversLoading(true)
+    try {
+      const res = await fetch(`/api/entity-receivers?entityId=${toEntityId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setReceivers(data)
+      } else {
+        setReceivers([])
+      }
+    } catch {
+      setReceivers([])
+    } finally {
+      setReceiversLoading(false)
+    }
+  }, [])
+
+  // When `viewing` changes, fetch receivers if the transfer is PENDING
+  useEffect(() => {
+    if (!viewing || viewing.status !== 'PENDING' || !viewing.toEntityId) {
+      setReceivers([])
+      return
+    }
+    fetchReceivers(viewing.toEntityId)
+    // Auto-refresh every 10 seconds so newly-added users show up automatically
+    const interval = setInterval(() => {
+      fetchReceivers(viewing.toEntityId)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [viewing, fetchReceivers])
 
   const receive = async (id: string) => {
     if (!confirm('Mark this transfer as received? Stock will be moved to destination entity.')) return
@@ -152,6 +193,49 @@ export function InternalTransfersPage() {
             <div><span className="text-muted-foreground">Date:</span> {viewing?.transferDate && new Date(viewing.transferDate).toLocaleDateString()}</div>
             <div><span className="text-muted-foreground">Status:</span> {viewing?.status}</div>
           </div>
+
+          {/* Pending receivers section — shows which users at the To Entity
+              have receive rights. Only shown for PENDING transfers. */}
+          {viewing?.status === 'PENDING' && (
+            <div className="mt-3 border rounded-md bg-amber-50/50 p-3">
+              <div className="text-xs font-semibold text-amber-800 flex items-center gap-1 mb-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Pending Receive — Awaiting action at {viewing?.toEntity?.name}
+              </div>
+              <div className="text-xs text-muted-foreground mb-2">
+                The following users have receive rights at this entity and can accept this transfer:
+              </div>
+              {receiversLoading ? (
+                <div className="text-xs text-muted-foreground animate-pulse">Loading receivers...</div>
+              ) : receivers.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {receivers.map((r: any) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1.5 text-xs bg-white border border-amber-200 px-2 py-1 rounded-md"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                      <span className="font-medium">{r.employeeName}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">({r.userId})</span>
+                      {r.role === 'ADMIN' && (
+                        <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">ADMIN</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-red-600 font-medium flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-red-500"></span>
+                  No User Available
+                </div>
+              )}
+              <div className="text-[10px] text-muted-foreground mt-2">
+                {receivers.length > 0
+                  ? 'This list auto-updates every 10 seconds. If a new user is granted receive rights, they will appear here automatically.'
+                  : 'Assign a user to this entity with receive rights — they will appear here automatically within 10 seconds.'}
+              </div>
+            </div>
+          )}
           <div className="border rounded-md mt-3 overflow-x-auto">
             <Table>
               <TableHeader>
@@ -160,38 +244,62 @@ export function InternalTransfersPage() {
                   <TableHead>Item Name</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>UoM</TableHead>
-                  <TableHead>Barcodes / Serials</TableHead>
+                  <TableHead>Barcodes</TableHead>
+                  <TableHead>Serial Numbers</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {viewing?.items?.length > 0 ? (
-                  viewing.items.map((it: any, idx: number) => (
-                    <TableRow key={it.id}>
-                      <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
-                      <TableCell>
-                        <div className="font-medium">{it.item?.name || '—'}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{it.quantity}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{it.item?.uom?.shortCode || '—'}</TableCell>
-                      <TableCell>
-                        {it.serials ? (
-                          <div className="flex flex-wrap gap-1">
-                            {it.serials.split(',').map((s: string, i: number) => (
-                              <span key={i} className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                                {s.trim()}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  viewing.items.map((it: any, idx: number) => {
+                    // Parse the "barcode|serial,barcode|serial" format
+                    // into separate barcode and serial arrays
+                    const units = (it.serials || '').split(',').map((u: string) => {
+                      const parts = u.split('|')
+                      return { barcode: parts[0] || '', serial: parts[1] || '' }
+                    }).filter((u: any) => u.barcode || u.serial)
+                    const barcodes = units.map((u: any) => u.barcode).filter(Boolean)
+                    const serials = units.map((u: any) => u.serial).filter(Boolean)
+                    return (
+                      <TableRow key={it.id}>
+                        <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">{it.item?.name || '—'}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
+                        </TableCell>
+                        <TableCell className="font-medium">{it.quantity}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{it.item?.uom?.shortCode || '—'}</TableCell>
+                        <TableCell>
+                          {barcodes.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {barcodes.map((bc: string, i: number) => (
+                                <span key={i} className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  {bc}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {serials.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {serials.map((sn: string, i: number) => (
+                                <span key={i} className="text-[10px] font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                                  {sn}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
                       No items in this transfer
                     </TableCell>
                   </TableRow>
