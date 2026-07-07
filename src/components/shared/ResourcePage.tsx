@@ -84,7 +84,7 @@ export function ResourcePage({
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
   const [q, setQ] = useState('')
-  const debouncedQ = useDebounce(q, 400) // 400ms debounce
+  const debouncedQ = useDebounce(q, 200) // 200ms — feels instant
 
   // Pagination state
   const [page, setPage] = useState(1)

@@ -3,8 +3,11 @@ import { Input } from '@/components/ui/input'
 import { Search, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
-// Debounced search input — reusable across all pages
-// 400ms debounce (same as ResourcePage)
+// Debounced search input — reusable across all pages.
+// 200ms debounce — feels instant to the user while still batching rapid
+// keystrokes (avoids hammering the server on every character).
+// Previous value was 400ms which felt sluggish; 200ms is the sweet spot
+// used by most modern typeahead UIs (GitHub, Linear, Slack, etc.).
 export function SearchInput({
   value,
   onChange,
@@ -23,11 +26,11 @@ export function SearchInput({
     setLocal(value)
   }, [value])
 
-  // Debounce 400ms
+  // Debounce 200ms — feels instant, still batches rapid typing
   useEffect(() => {
     const t = setTimeout(() => {
       if (local !== value) onChange(local)
-    }, 400)
+    }, 200)
     return () => clearTimeout(t)
   }, [local])
 

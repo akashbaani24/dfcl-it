@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ComboBox } from '@/components/ui/combobox'
+import { AsyncComboBox } from '@/components/ui/async-combobox'
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react'
 import { list, create, update, getOne } from '@/lib/api'
 import { toast } from 'sonner'
@@ -37,6 +38,7 @@ export function PurchaseEntryPage() {
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10))
   const [purchaseFor, setPurchaseFor] = useState('')        // Entity (purchasing)
   const [supplierId, setSupplierId] = useState('')
+  const [supplierLabel, setSupplierLabel] = useState('')     // Pre-resolved supplier name (for edit mode)
   const [invoiceNo, setInvoiceNo] = useState('')
   const [entryBy, setEntryBy] = useState(user?.employee?.name || user?.userId || '')
   const [shippingEntity, setShippingEntity] = useState('')   // Entity (receiving stock)
@@ -49,15 +51,16 @@ export function PurchaseEntryPage() {
       setEditingId(id)
       sessionStorage.removeItem('editingPurchaseId')
     }
+    // Only load entities, suppliers, and uoms upfront. Items are fetched on-
+    // demand by AsyncComboBox as the user types — this makes the page load
+    // much faster when there are thousands of items.
     Promise.all([
       list('entities'),
       list('suppliers'),
-      list('items'),
       list('uoms'),
-    ]).then(([e, s, i, u]) => {
+    ]).then(([e, s, u]) => {
       setEntities(e as any[])
       setSuppliers(s as any[])
-      setItems(i as any[])
       setUoms(u as any[])
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -70,6 +73,11 @@ export function PurchaseEntryPage() {
       setPurchaseDate(r.purchaseDate ? new Date(r.purchaseDate).toISOString().slice(0, 10) : '')
       setPurchaseFor(r.entityId || '')
       setSupplierId(r.supplierId || '')
+      // Pre-resolve the supplier name so AsyncComboBox shows it instantly
+      // instead of fetching on mount.
+      if (r.supplier?.name) {
+        setSupplierLabel(r.supplier.name)
+      }
       setInvoiceNo(r.invoiceNo || '')
       setEntryBy(r.createdBy || user?.employee?.name || '')
       // Shipping/Stock Receive entity — defaults to the purchase entity for
@@ -119,14 +127,23 @@ export function PurchaseEntryPage() {
     }))
   }
 
-  const onItemSelect = (id: string, itemId: string) => {
-    const item = items.find((i) => i.id === itemId)
-    if (item) {
+  const onItemSelect = async (id: string, itemId: string) => {
+    if (!itemId) {
+      updateLine(id, { itemId: '', itemName: '', uom: '' })
+      return
+    }
+    // Fetch the full item (with UoM) from the server — needed because
+    // AsyncComboBox only returns id+label+sublabel (not the full record).
+    try {
+      const full = await getOne('items', itemId) as any
       updateLine(id, {
         itemId,
-        itemName: item.name,
-        uom: item.uom?.shortCode || '',
+        itemName: full.name || '',
+        uom: full.uom?.shortCode || '',
       })
+    } catch {
+      // Fallback: just set the id without UoM
+      updateLine(id, { itemId, itemName: '', uom: '' })
     }
   }
 
@@ -244,15 +261,16 @@ export function PurchaseEntryPage() {
               />
             </div>
           </div>
-          {/* Supplier */}
+          {/* Supplier — async because supplier lists can grow large */}
           <div className="p-3 border-b sm:border-b-0">
             <Label className="text-xs font-semibold">Supplier</Label>
             <div className="mt-1">
-              <ComboBox
+              <AsyncComboBox
+                slug="suppliers"
                 value={supplierId}
-                onChange={setSupplierId}
-                options={suppliers.map((s) => ({ value: s.id, label: s.name, sublabel: s.shortCode }))}
-                placeholder="Select supplier"
+                onChange={(v) => { setSupplierId(v); setSupplierLabel('') }}
+                placeholder="Type to search supplier..."
+                initialLabel={supplierLabel || undefined}
               />
             </div>
           </div>
@@ -309,11 +327,12 @@ export function PurchaseEntryPage() {
                 <tr key={l.id} className="border-b hover:bg-slate-50/50">
                   <td className="px-3 py-2 text-center text-xs text-muted-foreground">{idx + 1}</td>
                   <td className="px-3 py-2">
-                    <ComboBox
+                    <AsyncComboBox
+                      slug="items"
                       value={l.itemId}
                       onChange={(v) => onItemSelect(l.id, v)}
-                      options={items.map((i) => ({ value: i.id, label: i.name, sublabel: i.itemCode }))}
-                      placeholder="Select item"
+                      placeholder="Type to search items..."
+                      initialLabel={l.itemName || undefined}
                     />
                   </td>
                   <td className="px-3 py-2">
