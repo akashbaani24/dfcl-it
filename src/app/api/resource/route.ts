@@ -182,7 +182,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: fkError, slug }, { status: 400 })
     }
 
-    const row = await model.create({ data: payload, include: cfg.include })
+    let row
+    try {
+      row = await model.create({ data: payload, include: cfg.include })
+    } catch (createErr: any) {
+      // Self-healing: if the error is "column does not exist", it means the
+      // production DB schema is out of date (e.g. we added `shippingEntityId`
+      // to schema.prisma but haven't pushed the schema to Turso yet). Run
+      // the auto-migration and retry once.
+      const createMsg = createErr.message || ''
+      if (createMsg.includes('does not exist in the current database') || createMsg.includes('no such column')) {
+        console.error('[resource POST] column missing — running auto-migration and retrying...')
+        try {
+          await fetch(`${req.nextUrl.origin}/api/migrate?auto=1`)
+        } catch (migErr: any) {
+          console.error('[resource POST] auto-migration failed:', migErr.message)
+        }
+        // Retry the create after migration
+        row = await model.create({ data: payload, include: cfg.include })
+      } else {
+        throw createErr
+      }
+    }
     return NextResponse.json(row)
   } catch (e: any) {
     // Log the full error + payload (minus line items) so we can diagnose
