@@ -56,6 +56,12 @@ export function Sidebar() {
     window.open(`${window.location.origin}${window.location.pathname}#${hash}`, '_blank')
   }
 
+  // Get href for a module (for right-click → Open in new tab)
+  const getHref = (moduleKey: string) => {
+    const hash = MODULE_TO_HASH[moduleKey] || moduleKey
+    return `#${hash}`
+  }
+
   return (
     <aside className="hidden md:flex w-64 shrink-0 border-r bg-card/40 backdrop-blur-sm flex-col">
       <div className="h-14 flex items-center px-4 border-b">
@@ -90,30 +96,34 @@ export function Sidebar() {
                   {sec.items.map((item) => {
                     const ItemIcon = item.icon
                     const isActive = active === item.key
+                    const href = getHref(item.key as string)
                     return (
-                      <div
+                      <a
                         key={item.key}
+                        href={href}
+                        onClick={(e) => {
+                          // Normal left-click → navigate in same tab
+                          e.preventDefault()
+                          setActive(item.key)
+                        }}
                         className={cn(
-                          'group w-full flex items-center gap-1 px-3 py-1.5 rounded-md text-[13px] hover:bg-accent transition-colors',
+                          'group w-full flex items-center gap-1 px-3 py-1.5 rounded-md text-[13px] hover:bg-accent transition-colors cursor-pointer',
                           isActive && 'bg-primary text-primary-foreground hover:bg-primary'
                         )}
                       >
-                        <button
-                          onClick={() => setActive(item.key)}
-                          className="flex items-center gap-2 flex-1 text-left min-w-0"
-                        >
+                        <span className="flex items-center gap-2 flex-1 text-left min-w-0">
                           <ItemIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1 text-left truncate">{item.label}</span>
-                        </button>
+                        </span>
                         {/* Open in new tab icon — shows on hover */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openInNewTab(item.key as string) }}
+                        <span
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); openInNewTab(item.key as string) }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 hover:text-blue-500"
                           title="Open in new tab"
                         >
                           <ExternalLink className="h-3 w-3" />
-                        </button>
-                      </div>
+                        </span>
+                      </a>
                     )
                   })}
                 </div>
