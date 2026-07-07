@@ -1,109 +1,218 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
-import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
-import { report } from '@/lib/api'
-import { usePerm, ExportButtons } from '@/components/shared/Perms'
-import { SearchInput } from '@/components/shared/SearchInput'
+import { ReportShell, Col, StatCard } from '@/components/shared/ReportShell'
+import { TableCell } from '@/components/ui/table'
+import { Badge } from '@/components/shared/PageHeader'
+
+const REPORT_TYPES = [
+  { value: 'summary', label: 'Summary', sublabel: 'One row per sale' },
+  { value: 'customer-wise', label: 'Customer Wise', sublabel: 'Grouped by customer' },
+  { value: 'entity-wise', label: 'Entity Wise', sublabel: 'Grouped by entity' },
+  { value: 'item-wise', label: 'Item Wise', sublabel: 'Grouped by item' },
+  { value: 'category-wise', label: 'Category Wise', sublabel: 'Grouped by category' },
+]
+
+function getColumns(rt: string): Col[] {
+  switch (rt) {
+    case 'summary':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'salesNo', label: 'Sales No' },
+        { key: 'salesDate', label: 'Date' },
+        { key: 'entity', label: 'Entity' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'customerPhone', label: 'Phone' },
+        { key: 'itemCount', label: 'Items', align: 'right' },
+        { key: 'totalQty', label: 'Qty', align: 'right' },
+        { key: 'totalAmount', label: 'Total', align: 'right' },
+        { key: 'paidAmount', label: 'Paid', align: 'right' },
+        { key: 'due', label: 'Due', align: 'right' },
+        { key: 'status', label: 'Status' },
+      ]
+    case 'customer-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'salesCount', label: 'Sales', align: 'right' },
+        { key: 'totalAmount', label: 'Total Amount', align: 'right' },
+        { key: 'totalPaid', label: 'Total Paid', align: 'right' },
+      ]
+    case 'entity-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'entity', label: 'Entity' },
+        { key: 'salesCount', label: 'Sales', align: 'right' },
+        { key: 'totalAmount', label: 'Total Amount', align: 'right' },
+        { key: 'totalPaid', label: 'Total Paid', align: 'right' },
+      ]
+    case 'item-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'itemName', label: 'Item Name' },
+        { key: 'modelNo', label: 'Model No' },
+        { key: 'uom', label: 'UoM' },
+        { key: 'salesCount', label: 'Times Sold', align: 'right' },
+        { key: 'qty', label: 'Total Qty', align: 'right' },
+        { key: 'totalAmount', label: 'Total Amount', align: 'right' },
+      ]
+    case 'category-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'category', label: 'Category' },
+        { key: 'itemCount', label: 'Item Count', align: 'right' },
+        { key: 'qty', label: 'Total Qty', align: 'right' },
+        { key: 'totalAmount', label: 'Total Amount', align: 'right' },
+      ]
+    default:
+      return []
+  }
+}
+
+function renderRow(r: any, rt: string, idx: number): React.ReactNode {
+  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString() : '—'
+  const fmtMoney = (n: number) => `৳${(n || 0).toFixed(2)}`
+
+  switch (rt) {
+    case 'summary':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-mono">{r.salesNo}</TableCell>
+          <TableCell className="text-xs">{fmtDate(r.salesDate)}</TableCell>
+          <TableCell className="text-xs">{r.entity}</TableCell>
+          <TableCell className="text-xs font-medium">{r.customer}</TableCell>
+          <TableCell className="text-xs">{r.customerPhone}</TableCell>
+          <TableCell className="text-xs text-right">{r.itemCount}</TableCell>
+          <TableCell className="text-xs text-right">{r.totalQty}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(r.totalAmount)}</TableCell>
+          <TableCell className="text-xs text-right text-green-600">{fmtMoney(r.paidAmount)}</TableCell>
+          <TableCell className="text-xs text-right text-orange-600">{fmtMoney(r.due)}</TableCell>
+          <TableCell><Badge status={r.status} /></TableCell>
+        </>
+      )
+    case 'customer-wise':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-medium">{r.customer}</TableCell>
+          <TableCell className="text-xs">{r.phone || '—'}</TableCell>
+          <TableCell className="text-xs text-right">{r.salesCount}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(r.totalAmount)}</TableCell>
+          <TableCell className="text-xs text-right text-green-600">{fmtMoney(r.totalPaid)}</TableCell>
+        </>
+      )
+    case 'entity-wise':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-medium">{r.entity}</TableCell>
+          <TableCell className="text-xs text-right">{r.salesCount}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(r.totalAmount)}</TableCell>
+          <TableCell className="text-xs text-right text-green-600">{fmtMoney(r.totalPaid)}</TableCell>
+        </>
+      )
+    case 'item-wise':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-medium">{r.itemName}</TableCell>
+          <TableCell className="text-xs font-mono">{r.modelNo}</TableCell>
+          <TableCell className="text-xs">{r.uom}</TableCell>
+          <TableCell className="text-xs text-right">{r.salesCount}</TableCell>
+          <TableCell className="text-xs text-right">{r.qty}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(r.totalAmount)}</TableCell>
+        </>
+      )
+    case 'category-wise':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-medium">{r.category}</TableCell>
+          <TableCell className="text-xs text-right">{r.itemCount}</TableCell>
+          <TableCell className="text-xs text-right">{r.qty}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(r.totalAmount)}</TableCell>
+        </>
+      )
+    default:
+      return null
+  }
+}
+
+function renderTotalRow(rows: any[], data: any, rt: string): React.ReactNode {
+  const fmtMoney = (n: number) => `৳${(n || 0).toFixed(2)}`
+  const { TableCell } = require('@/components/ui/table')
+
+  switch (rt) {
+    case 'summary':
+      return (
+        <>
+          <TableCell colSpan={7} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">{rows.reduce((s, r) => s + r.totalQty, 0)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalAmount)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalPaid)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalAmount - data.totalPaid)}</TableCell>
+          <TableCell></TableCell>
+        </>
+      )
+    case 'customer-wise':
+    case 'entity-wise':
+      return (
+        <>
+          <TableCell colSpan={2} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">{rows.reduce((s, r) => s + r.salesCount, 0)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalAmount)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(rows.reduce((s, r) => s + r.totalPaid, 0))}</TableCell>
+        </>
+      )
+    case 'item-wise':
+      return (
+        <>
+          <TableCell colSpan={4} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">{data.totalQty}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalAmount)}</TableCell>
+        </>
+      )
+    case 'category-wise':
+      return (
+        <>
+          <TableCell colSpan={3} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">{rows.reduce((s, r) => s + r.qty, 0)}</TableCell>
+          <TableCell className="text-xs text-right">{fmtMoney(data.totalAmount)}</TableCell>
+        </>
+      )
+    default:
+      return null
+  }
+}
+
+function getStats(data: any, rows: any[]): StatCard[] {
+  if (!data) return []
+  return [
+    { label: 'Total Sales', value: String(rows.length) },
+    { label: 'Total Amount', value: `৳${(data.totalAmount || 0).toFixed(2)}`, color: 'text-blue-600' },
+    { label: 'Total Paid', value: `৳${(data.totalPaid || 0).toFixed(2)}`, color: 'text-emerald-600' },
+    { label: 'Total Due', value: `৳${((data.totalAmount || 0) - (data.totalPaid || 0)).toFixed(2)}`, color: 'text-orange-600' },
+  ]
+}
+
+function getExportColumns(rt: string) {
+  return getColumns(rt).map(c => ({ key: c.key, label: c.label }))
+}
 
 export function ReportsSalesPage() {
-  const perm = usePerm('reports-sales')
-  const [rows, setRows] = useState<any[]>([])
-  const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [total, setTotal] = useState(0)
-  const [paid, setPaid] = useState(0)
-
-  useEffect(() => {
-    if (!perm.canView) return
-    report('sales-summary').then((r) => {
-      setRows(r)
-      setTotal(r.reduce((s: number, x: any) => s + (x.total || 0), 0))
-      setPaid(r.reduce((s: number, x: any) => s + (x.paid || 0), 0))
-    }).catch(() => {}).finally(() => setLoading(false))
-  }, [perm.canView])
-
-  const filtered = useMemo(() => {
-    if (!q) return rows
-    const ql = q.toLowerCase()
-    return rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql))
-  }, [q, rows])
-
-  if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
-
-  const exportRows = rows.map((r) => ({
-    salesNo: r.salesNo,
-    date: new Date(r.date).toLocaleDateString(),
-    entity: r.entity?.name,
-    customer: r.customer,
-    items: r.itemCount,
-    status: r.status,
-    total: r.total,
-    paid: r.paid,
-  }))
-  const exportColumns = [
-    { key: 'salesNo', label: 'Sales No' },
-    { key: 'date', label: 'Date' },
-    { key: 'entity', label: 'Entity' },
-    { key: 'customer', label: 'Customer' },
-    { key: 'items', label: 'Items' },
-    { key: 'status', label: 'Status' },
-    { key: 'total', label: 'Total' },
-    { key: 'paid', label: 'Paid' },
-  ]
-
   return (
-    <div>
-      <PageHeader title="Sales Report" description="All sales orders with totals & payment status" />
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="Search sales..." />
-        <ExportButtons module="reports-sales" title="Sales Report" rows={exportRows} columns={exportColumns} />
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Sales</div><div className="text-2xl font-bold">{rows.length}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Value</div><div className="text-2xl font-bold">৳{total.toFixed(2)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Received</div><div className="text-2xl font-bold text-emerald-600">৳{paid.toFixed(2)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Pending Delivery</div><div className="text-2xl font-bold text-amber-600">{rows.filter((r) => r.deliveryStatus === 'PENDING').length}</div></CardContent></Card>
-      </div>
-      {loading ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : filtered.length === 0 ? (
-        <EmptyState title="No sales" />
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sales No</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Paid</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((r, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-sm">{r.salesNo}</TableCell>
-                    <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{r.entity?.name}</TableCell>
-                    <TableCell>{r.customer}</TableCell>
-                    <TableCell>{r.itemCount}</TableCell>
-                    <TableCell><Badge status={r.status} /></TableCell>
-                    <TableCell className="text-right">৳{r.total.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">৳{r.paid.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <ReportShell
+      title="Sales Report"
+      description="Sales reports with date filtering and grouping options"
+      permModule="reports-sales"
+      reportTypes={REPORT_TYPES}
+      apiType="sales-report"
+      defaultReportType="summary"
+      columns={getColumns}
+      renderRow={renderRow}
+      renderTotalRow={renderTotalRow}
+      stats={getStats}
+      exportColumns={getExportColumns}
+    />
   )
 }

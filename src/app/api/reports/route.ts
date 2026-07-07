@@ -408,6 +408,452 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(serials)
       }
 
+      // ===== SALES REPORT (enhanced with date filter + report types) =====
+      case 'sales-report': {
+        const reportType = searchParams.get('reportType') || 'summary'
+        const range = searchParams.get('range') || 'monthly'
+        const from = searchParams.get('from')
+        const to = searchParams.get('to')
+
+        const dateWhere: any = {}
+        const now = new Date()
+        if (range === 'daily') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        } else if (range === 'monthly') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), 1)
+        } else if (range === 'yearly') {
+          dateWhere.gte = new Date(now.getFullYear(), 0, 1)
+        } else if (range === 'custom' && from && to) {
+          dateWhere.gte = new Date(from)
+          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+        }
+
+        const sales = await db.sales.findMany({
+          where: Object.keys(dateWhere).length > 0 ? { salesDate: dateWhere } : {},
+          include: {
+            entity: true,
+            items: {
+              include: {
+                item: { include: { category: { include: { parent: true } }, uom: true } },
+              },
+            },
+          },
+          orderBy: { salesDate: 'desc' },
+        })
+
+        if (reportType === 'summary') {
+          const summaryRows = sales.map((s, i) => ({
+            sl: i + 1,
+            salesNo: s.salesNo,
+            salesDate: s.salesDate,
+            entity: s.entity?.name || '—',
+            customer: s.customerName,
+            customerPhone: s.customerPhone || '—',
+            itemCount: s.items.length,
+            totalQty: s.items.reduce((s2: number, it: any) => s2 + it.quantity, 0),
+            totalAmount: s.totalAmount,
+            paidAmount: s.paidAmount,
+            due: s.totalAmount - s.paidAmount,
+            status: s.status,
+            deliveryStatus: s.deliveryStatus,
+          }))
+          return NextResponse.json({
+            reportType: 'summary', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows: summaryRows,
+            totalAmount: summaryRows.reduce((s, r) => s + r.totalAmount, 0),
+            totalPaid: summaryRows.reduce((s, r) => s + r.paidAmount, 0),
+          })
+        }
+
+        if (reportType === 'customer-wise') {
+          const byCustomer: Record<string, any> = {}
+          for (const s of sales) {
+            const key = s.customerName || 'Unknown'
+            if (!byCustomer[key]) byCustomer[key] = { customer: key, phone: s.customerPhone, salesCount: 0, totalAmount: 0, totalPaid: 0 }
+            byCustomer[key].salesCount++
+            byCustomer[key].totalAmount += s.totalAmount
+            byCustomer[key].totalPaid += s.paidAmount
+          }
+          const rows = Object.values(byCustomer).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'customer-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+          })
+        }
+
+        if (reportType === 'entity-wise') {
+          const byEntity: Record<string, any> = {}
+          for (const s of sales) {
+            const key = s.entity?.name || 'Unknown'
+            if (!byEntity[key]) byEntity[key] = { entity: key, salesCount: 0, totalAmount: 0, totalPaid: 0 }
+            byEntity[key].salesCount++
+            byEntity[key].totalAmount += s.totalAmount
+            byEntity[key].totalPaid += s.paidAmount
+          }
+          const rows = Object.values(byEntity).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'entity-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+          })
+        }
+
+        if (reportType === 'item-wise') {
+          const byItem: Record<string, any> = {}
+          for (const s of sales) {
+            for (const it of s.items) {
+              const key = it.item?.name || 'Unknown'
+              if (!byItem[key]) byItem[key] = { itemName: key, modelNo: it.item?.itemCode, uom: it.item?.uom?.shortCode, qty: 0, totalAmount: 0, salesCount: 0 }
+              byItem[key].qty += it.quantity
+              byItem[key].totalAmount += it.totalPrice
+              byItem[key].salesCount++
+            }
+          }
+          const rows = Object.values(byItem).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'item-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.qty, 0),
+            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+          })
+        }
+
+        if (reportType === 'category-wise') {
+          const byCat: Record<string, any> = {}
+          for (const s of sales) {
+            for (const it of s.items) {
+              const cat = it.item?.category
+              const topCat = cat?.parent?.name || cat?.name || 'Uncategorized'
+              if (!byCat[topCat]) byCat[topCat] = { category: topCat, qty: 0, totalAmount: 0, itemCount: 0 }
+              byCat[topCat].qty += it.quantity
+              byCat[topCat].totalAmount += it.totalPrice
+              byCat[topCat].itemCount++
+            }
+          }
+          const rows = Object.values(byCat).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'category-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+          })
+        }
+
+        return NextResponse.json({ error: 'Unknown reportType for sales-report. Available: summary, customer-wise, entity-wise, item-wise, category-wise' }, { status: 400 })
+      }
+
+      // ===== STOCK REPORT =====
+      case 'stock-report': {
+        const reportType = searchParams.get('reportType') || 'summary'
+
+        const [entities, items] = await Promise.all([
+          db.entity.findMany(),
+          db.item.findMany({ include: { category: { include: { parent: true } }, uom: true } }),
+        ])
+        const balancesRaw = await db.stockTransaction.groupBy({
+          by: ['entityId', 'itemId'],
+          _sum: { quantity: true },
+        })
+        const balanceMap: Record<string, number> = {}
+        for (const b of balancesRaw) {
+          balanceMap[`${b.entityId}|${b.itemId}`] = b._sum.quantity || 0
+        }
+
+        if (reportType === 'summary') {
+          // One row per item with total stock across all entities
+          const rows = items.map((item, i) => {
+            let totalBalance = 0
+            for (const e of entities) {
+              totalBalance += balanceMap[`${e.id}|${item.id}`] || 0
+            }
+            return {
+              sl: i + 1,
+              itemName: item.name,
+              itemCode: item.itemCode,
+              category: item.category?.parent?.name || item.category?.name || '—',
+              uom: item.uom?.shortCode || '—',
+              totalStock: totalBalance,
+            }
+          }).filter(r => r.totalStock !== 0)
+          return NextResponse.json({
+            reportType: 'summary', range: 'all',
+            rows,
+            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+          })
+        }
+
+        if (reportType === 'entity-wise') {
+          // One row per entity + item
+          const rows: any[] = []
+          let sl = 1
+          for (const e of entities) {
+            for (const item of items) {
+              const balance = balanceMap[`${e.id}|${item.id}`] || 0
+              if (balance !== 0) {
+                rows.push({
+                  sl: sl++,
+                  entity: e.name,
+                  itemName: item.name,
+                  itemCode: item.itemCode,
+                  category: item.category?.parent?.name || item.category?.name || '—',
+                  uom: item.uom?.shortCode || '—',
+                  stock: balance,
+                })
+              }
+            }
+          }
+          return NextResponse.json({
+            reportType: 'entity-wise', range: 'all',
+            rows,
+            totalStock: rows.reduce((s, r) => s + r.stock, 0),
+          })
+        }
+
+        if (reportType === 'category-wise') {
+          const byCat: Record<string, any> = {}
+          for (const item of items) {
+            const cat = item.category
+            const topCat = cat?.parent?.name || cat?.name || 'Uncategorized'
+            let totalBalance = 0
+            for (const e of entities) {
+              totalBalance += balanceMap[`${e.id}|${item.id}`] || 0
+            }
+            if (totalBalance !== 0) {
+              if (!byCat[topCat]) byCat[topCat] = { category: topCat, itemCount: 0, totalStock: 0 }
+              byCat[topCat].itemCount++
+              byCat[topCat].totalStock += totalBalance
+            }
+          }
+          const rows = Object.values(byCat).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'category-wise', range: 'all',
+            rows,
+            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+          })
+        }
+
+        if (reportType === 'item-wise') {
+          // Same as summary but grouped differently
+          const rows = items.map((item, i) => {
+            let totalBalance = 0
+            const entityStocks: any[] = []
+            for (const e of entities) {
+              const bal = balanceMap[`${e.id}|${item.id}`] || 0
+              if (bal !== 0) {
+                totalBalance += bal
+                entityStocks.push({ entity: e.name, stock: bal })
+              }
+            }
+            return {
+              sl: i + 1,
+              itemName: item.name,
+              itemCode: item.itemCode,
+              uom: item.uom?.shortCode || '—',
+              totalStock: totalBalance,
+              entities: entityStocks,
+            }
+          }).filter(r => r.totalStock !== 0)
+          return NextResponse.json({
+            reportType: 'item-wise', range: 'all',
+            rows,
+            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+          })
+        }
+
+        return NextResponse.json({ error: 'Unknown reportType for stock-report. Available: summary, entity-wise, category-wise, item-wise' }, { status: 400 })
+      }
+
+      // ===== ACCOUNTS REPORT =====
+      case 'accounts-report': {
+        const reportType = searchParams.get('reportType') || 'summary'
+        const range = searchParams.get('range') || 'monthly'
+        const from = searchParams.get('from')
+        const to = searchParams.get('to')
+
+        const dateWhere: any = {}
+        const now = new Date()
+        if (range === 'daily') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        } else if (range === 'monthly') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), 1)
+        } else if (range === 'yearly') {
+          dateWhere.gte = new Date(now.getFullYear(), 0, 1)
+        } else if (range === 'custom' && from && to) {
+          dateWhere.gte = new Date(from)
+          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+        }
+
+        const entries = await db.accountEntry.findMany({
+          where: Object.keys(dateWhere).length > 0 ? { date: dateWhere } : {},
+          include: { entity: true },
+          orderBy: { date: 'desc' },
+        })
+
+        if (reportType === 'summary') {
+          const rows = entries.map((e, i) => ({
+            sl: i + 1,
+            entryNo: e.entryNo,
+            date: e.date,
+            entity: e.entity?.name || '—',
+            type: e.type,
+            category: e.category,
+            amount: e.amount,
+            method: e.method,
+            description: e.description || '—',
+          }))
+          return NextResponse.json({
+            reportType: 'summary', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalExpense: entries.filter(e => e.type === 'EXPENSE').reduce((s, e) => s + e.amount, 0),
+            totalReceive: entries.filter(e => e.type === 'RECEIVE').reduce((s, e) => s + e.amount, 0),
+          })
+        }
+
+        if (reportType === 'category-wise') {
+          const byCat: Record<string, any> = {}
+          for (const e of entries) {
+            const key = e.category
+            if (!byCat[key]) byCat[key] = { category: key, expense: 0, receive: 0, count: 0 }
+            if (e.type === 'EXPENSE') byCat[key].expense += e.amount
+            else byCat[key].receive += e.amount
+            byCat[key].count++
+          }
+          const rows = Object.values(byCat).map((r: any, i: number) => ({
+            sl: i + 1, ...r,
+            net: r.receive - r.expense,
+          }))
+          return NextResponse.json({
+            reportType: 'category-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalExpense: rows.reduce((s, r) => s + r.expense, 0),
+            totalReceive: rows.reduce((s, r) => s + r.receive, 0),
+          })
+        }
+
+        if (reportType === 'entity-wise') {
+          const byEntity: Record<string, any> = {}
+          for (const e of entries) {
+            const key = e.entity?.name || 'Unknown'
+            if (!byEntity[key]) byEntity[key] = { entity: key, expense: 0, receive: 0, count: 0 }
+            if (e.type === 'EXPENSE') byEntity[key].expense += e.amount
+            else byEntity[key].receive += e.amount
+            byEntity[key].count++
+          }
+          const rows = Object.values(byEntity).map((r: any, i: number) => ({
+            sl: i + 1, ...r,
+            net: r.receive - r.expense,
+          }))
+          return NextResponse.json({
+            reportType: 'entity-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalExpense: rows.reduce((s, r) => s + r.expense, 0),
+            totalReceive: rows.reduce((s, r) => s + r.receive, 0),
+          })
+        }
+
+        if (reportType === 'type-wise') {
+          const expense = entries.filter(e => e.type === 'EXPENSE')
+          const receive = entries.filter(e => e.type === 'RECEIVE')
+          const rows = [
+            { sl: 1, type: 'EXPENSE', count: expense.length, total: expense.reduce((s, e) => s + e.amount, 0) },
+            { sl: 2, type: 'RECEIVE', count: receive.length, total: receive.reduce((s, e) => s + e.amount, 0) },
+          ]
+          return NextResponse.json({
+            reportType: 'type-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalExpense: rows[0].total,
+            totalReceive: rows[1].total,
+          })
+        }
+
+        return NextResponse.json({ error: 'Unknown reportType for accounts-report. Available: summary, category-wise, entity-wise, type-wise' }, { status: 400 })
+      }
+
+      // ===== SERIAL STATUS REPORT =====
+      case 'serial-report': {
+        const reportType = searchParams.get('reportType') || 'status-wise'
+
+        const serials = await db.itemSerial.findMany({
+          include: { item: { include: { category: { include: { parent: true } } } }, entity: true },
+          orderBy: { createdAt: 'desc' },
+        })
+
+        if (reportType === 'status-wise') {
+          const byStatus: Record<string, any> = {}
+          for (const s of serials) {
+            const key = s.status
+            if (!byStatus[key]) byStatus[key] = { status: key, count: 0, items: new Set() }
+            byStatus[key].count++
+            byStatus[key].items.add(s.item?.name)
+          }
+          const rows = Object.values(byStatus).map((r: any, i: number) => ({
+            sl: i + 1, status: r.status, count: r.count, uniqueItems: r.items.size,
+          }))
+          return NextResponse.json({
+            reportType: 'status-wise', range: 'all',
+            rows,
+            totalSerials: serials.length,
+          })
+        }
+
+        if (reportType === 'item-wise') {
+          const byItem: Record<string, any> = {}
+          for (const s of serials) {
+            const key = s.item?.name || 'Unknown'
+            if (!byItem[key]) byItem[key] = { itemName: key, itemCode: s.item?.itemCode, total: 0, inStock: 0, sold: 0, other: 0 }
+            byItem[key].total++
+            if (s.status === 'IN_STOCK') byItem[key].inStock++
+            else if (s.status === 'SOLD') byItem[key].sold++
+            else byItem[key].other++
+          }
+          const rows = Object.values(byItem).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'item-wise', range: 'all',
+            rows,
+            totalSerials: serials.length,
+          })
+        }
+
+        if (reportType === 'entity-wise') {
+          const byEntity: Record<string, any> = {}
+          for (const s of serials) {
+            const key = s.entity?.name || 'Unknown'
+            if (!byEntity[key]) byEntity[key] = { entity: key, total: 0, inStock: 0, sold: 0, other: 0 }
+            byEntity[key].total++
+            if (s.status === 'IN_STOCK') byEntity[key].inStock++
+            else if (s.status === 'SOLD') byEntity[key].sold++
+            else byEntity[key].other++
+          }
+          const rows = Object.values(byEntity).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'entity-wise', range: 'all',
+            rows,
+            totalSerials: serials.length,
+          })
+        }
+
+        if (reportType === 'details') {
+          const rows = serials.map((s, i) => ({
+            sl: i + 1,
+            serialNumber: s.serialNumber,
+            barcode: s.barcode || '—',
+            itemName: s.item?.name || '—',
+            itemCode: s.item?.itemCode || '—',
+            category: s.item?.category?.parent?.name || s.item?.category?.name || '—',
+            entity: s.entity?.name || '—',
+            status: s.status,
+            createdAt: s.createdAt,
+          }))
+          return NextResponse.json({
+            reportType: 'details', range: 'all',
+            rows,
+            totalSerials: serials.length,
+          })
+        }
+
+        return NextResponse.json({ error: 'Unknown reportType for serial-report. Available: status-wise, item-wise, entity-wise, details' }, { status: 400 })
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown report type' }, { status: 400 })
     }

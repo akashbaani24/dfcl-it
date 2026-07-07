@@ -1,127 +1,176 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
-import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
-import { report } from '@/lib/api'
-import { usePerm, ExportButtons } from '@/components/shared/Perms'
-import { SearchInput } from '@/components/shared/SearchInput'
+import { ReportShell, Col, StatCard } from '@/components/shared/ReportShell'
+import { TableCell } from '@/components/ui/table'
+
+const REPORT_TYPES = [
+  { value: 'summary', label: 'Summary', sublabel: 'All transactions' },
+  { value: 'category-wise', label: 'Category Wise', sublabel: 'Grouped by category' },
+  { value: 'entity-wise', label: 'Entity Wise', sublabel: 'Grouped by entity' },
+  { value: 'type-wise', label: 'Type Wise', sublabel: 'Expense vs Receive' },
+]
+
+function getColumns(rt: string): Col[] {
+  switch (rt) {
+    case 'summary':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'entryNo', label: 'Entry No' },
+        { key: 'date', label: 'Date' },
+        { key: 'entity', label: 'Entity' },
+        { key: 'type', label: 'Type' },
+        { key: 'category', label: 'Category' },
+        { key: 'amount', label: 'Amount', align: 'right' },
+        { key: 'method', label: 'Method' },
+        { key: 'description', label: 'Description' },
+      ]
+    case 'category-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'category', label: 'Category' },
+        { key: 'count', label: 'Count', align: 'right' },
+        { key: 'expense', label: 'Expense', align: 'right' },
+        { key: 'receive', label: 'Receive', align: 'right' },
+        { key: 'net', label: 'Net', align: 'right' },
+      ]
+    case 'entity-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'entity', label: 'Entity' },
+        { key: 'count', label: 'Count', align: 'right' },
+        { key: 'expense', label: 'Expense', align: 'right' },
+        { key: 'receive', label: 'Receive', align: 'right' },
+        { key: 'net', label: 'Net', align: 'right' },
+      ]
+    case 'type-wise':
+      return [
+        { key: 'sl', label: 'Sl' },
+        { key: 'type', label: 'Type' },
+        { key: 'count', label: 'Count', align: 'right' },
+        { key: 'total', label: 'Total', align: 'right' },
+      ]
+    default:
+      return []
+  }
+}
+
+function renderRow(r: any, rt: string, idx: number): React.ReactNode {
+  const fmtMoney = (n: number) => `৳${(n || 0).toFixed(2)}`
+  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString() : '—'
+
+  switch (rt) {
+    case 'summary':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-mono">{r.entryNo}</TableCell>
+          <TableCell className="text-xs">{fmtDate(r.date)}</TableCell>
+          <TableCell className="text-xs">{r.entity}</TableCell>
+          <TableCell>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.type === 'EXPENSE' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              {r.type}
+            </span>
+          </TableCell>
+          <TableCell className="text-xs">{r.category}</TableCell>
+          <TableCell className={`text-xs text-right font-medium ${r.type === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>{fmtMoney(r.amount)}</TableCell>
+          <TableCell className="text-xs">{r.method}</TableCell>
+          <TableCell className="text-xs text-muted-foreground">{r.description}</TableCell>
+        </>
+      )
+    case 'category-wise':
+    case 'entity-wise':
+      const key = rt === 'category-wise' ? r.category : r.entity
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell className="text-xs font-medium">{key}</TableCell>
+          <TableCell className="text-xs text-right">{r.count}</TableCell>
+          <TableCell className="text-xs text-right text-red-600">{fmtMoney(r.expense)}</TableCell>
+          <TableCell className="text-xs text-right text-green-600">{fmtMoney(r.receive)}</TableCell>
+          <TableCell className={`text-xs text-right font-medium ${r.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtMoney(r.net)}</TableCell>
+        </>
+      )
+    case 'type-wise':
+      return (
+        <>
+          <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
+          <TableCell>
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${r.type === 'EXPENSE' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              {r.type}
+            </span>
+          </TableCell>
+          <TableCell className="text-xs text-right">{r.count}</TableCell>
+          <TableCell className={`text-xs text-right font-medium ${r.type === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>{fmtMoney(r.total)}</TableCell>
+        </>
+      )
+    default:
+      return null
+  }
+}
+
+function renderTotalRow(rows: any[], data: any, rt: string): React.ReactNode {
+  const fmtMoney = (n: number) => `৳${(n || 0).toFixed(2)}`
+
+  switch (rt) {
+    case 'summary':
+      return (
+        <>
+          <TableCell colSpan={6} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">Expense: <span className="text-red-600">{fmtMoney(data.totalExpense)}</span> | Receive: <span className="text-green-600">{fmtMoney(data.totalReceive)}</span></TableCell>
+          <TableCell colSpan={2}></TableCell>
+        </>
+      )
+    case 'category-wise':
+    case 'entity-wise':
+      return (
+        <>
+          <TableCell colSpan={2} className="text-right text-xs">Total:</TableCell>
+          <TableCell className="text-xs text-right">{rows.reduce((s, r) => s + r.count, 0)}</TableCell>
+          <TableCell className="text-xs text-right text-red-600">{fmtMoney(data.totalExpense)}</TableCell>
+          <TableCell className="text-xs text-right text-green-600">{fmtMoney(data.totalReceive)}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(data.totalReceive - data.totalExpense)}</TableCell>
+        </>
+      )
+    case 'type-wise':
+      return (
+        <>
+          <TableCell colSpan={2} className="text-right text-xs">Net:</TableCell>
+          <TableCell className="text-xs text-right">{rows.reduce((s, r) => s + r.count, 0)}</TableCell>
+          <TableCell className="text-xs text-right font-medium">{fmtMoney(data.totalReceive - data.totalExpense)}</TableCell>
+        </>
+      )
+    default:
+      return null
+  }
+}
+
+function getStats(data: any, rows: any[]): StatCard[] {
+  if (!data) return []
+  return [
+    { label: 'Total Entries', value: String(rows.length) },
+    { label: 'Total Expense', value: `৳${(data.totalExpense || 0).toFixed(2)}`, color: 'text-red-600' },
+    { label: 'Total Receive', value: `৳${(data.totalReceive || 0).toFixed(2)}`, color: 'text-green-600' },
+    { label: 'Net', value: `৳${((data.totalReceive || 0) - (data.totalExpense || 0)).toFixed(2)}`, color: ((data.totalReceive || 0) - (data.totalExpense || 0)) >= 0 ? 'text-green-600' : 'text-red-600' },
+  ]
+}
+
+function getExportColumns(rt: string) {
+  return getColumns(rt).map(c => ({ key: c.key, label: c.label }))
+}
 
 export function ReportsAccountsPage() {
-  const perm = usePerm('reports-accounts')
-  const [data, setData] = useState<any>(null)
-  const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!perm.canView) return
-    report('accounts-summary').then((r) => setData(r)).catch(() => {}).finally(() => setLoading(false))
-  }, [perm.canView])
-
-  const filtered = useMemo(() => {
-    const entries = data?.entries || []
-    if (!q) return entries
-    const ql = q.toLowerCase()
-    return entries.filter((e: any) => JSON.stringify(e).toLowerCase().includes(ql))
-  }, [q, data])
-
-  if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
-  if (loading) return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-  if (!data) return <EmptyState title="No data" />
-
-  const exportRows = (data.entries || []).map((e: any) => ({
-    entryNo: e.entryNo,
-    date: new Date(e.date).toLocaleDateString(),
-    entity: e.entity?.name,
-    type: e.type,
-    category: e.category,
-    method: e.method,
-    amount: e.amount,
-    description: e.description,
-  }))
-  const exportColumns = [
-    { key: 'entryNo', label: 'Entry No' },
-    { key: 'date', label: 'Date' },
-    { key: 'entity', label: 'Entity' },
-    { key: 'type', label: 'Type' },
-    { key: 'category', label: 'Category' },
-    { key: 'method', label: 'Method' },
-    { key: 'amount', label: 'Amount' },
-    { key: 'description', label: 'Description' },
-  ]
-
   return (
-    <div>
-      <PageHeader title="Accounts Report" description="Daily expenses & receive summary" />
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="Search entries..." />
-        <ExportButtons module="reports-accounts" title="Accounts Report" rows={exportRows} columns={exportColumns} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Expense</div><div className="text-2xl font-bold text-rose-600">৳{data.totalExpense.toFixed(2)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total Receive</div><div className="text-2xl font-bold text-emerald-600">৳{data.totalReceive.toFixed(2)}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Net</div><div className={`text-2xl font-bold ${data.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>৳{data.net.toFixed(2)}</div></CardContent></Card>
-      </div>
-
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <h3 className="text-sm font-semibold mb-2">By Category</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Expense</TableHead>
-                <TableHead className="text-right">Receive</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(data.byCategory).map(([cat, v]: any) => (
-                <TableRow key={cat}>
-                  <TableCell className="font-medium">{cat}</TableCell>
-                  <TableCell className="text-right text-rose-600">৳{v.expense.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-emerald-600">৳{v.receive.toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-0">
-          <div className="p-3 border-b text-sm font-semibold">All Entries</div>
-          <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card">
-                <TableRow>
-                  <TableHead>Entry No</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((e: any) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-mono text-xs">{e.entryNo}</TableCell>
-                    <TableCell>{new Date(e.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{e.entity?.name}</TableCell>
-                    <TableCell>
-                      <span className={`text-xs px-2 py-0.5 rounded ${e.type === 'EXPENSE' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>{e.type}</span>
-                    </TableCell>
-                    <TableCell>{e.category}</TableCell>
-                    <TableCell>{e.method}</TableCell>
-                    <TableCell className="text-right font-medium">৳{e.amount.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <ReportShell
+      title="Accounts Report"
+      description="Expense and receive transactions with grouping options"
+      permModule="reports-accounts"
+      reportTypes={REPORT_TYPES}
+      apiType="accounts-report"
+      defaultReportType="summary"
+      columns={getColumns}
+      renderRow={renderRow}
+      renderTotalRow={renderTotalRow}
+      stats={getStats}
+      exportColumns={getExportColumns}
+    />
   )
 }
