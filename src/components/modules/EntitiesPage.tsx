@@ -32,7 +32,7 @@ export function EntitiesPage() {
     {
       name: 'parentId', label: 'Parent Entity',
       type: 'select',
-      options: [{ value: '__NONE__', label: '— Root —' }, ...entities.map((e) => ({ value: e.id, label: `${e.name} (${e.shortCode})` }))],
+      options: [{ value: '__NONE__', label: '— Root —' }, ...entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))],
       placeholder: 'Select parent (optional)',
     },
     { name: 'address', label: 'Address', type: 'textarea', full: true },

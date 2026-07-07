@@ -79,7 +79,7 @@ export function StockAllPage() {
               onChange={(v) => setEntityId(v === '__ALL__' ? '' : v)}
               options={[
                 { value: '__ALL__', label: 'All Entities' },
-                ...entities.map((e) => ({ value: e.id, label: `${e.name} (${e.shortCode})` })),
+                ...entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
               ]}
               placeholder="All entities"
             />

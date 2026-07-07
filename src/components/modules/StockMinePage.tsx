@@ -76,7 +76,7 @@ export function StockMinePage() {
             <ComboBox
               value={entityId || ''}
               onChange={setEntityId}
-              options={entities.map((e) => ({ value: e.id, label: `${e.name} (${e.shortCode})` }))}
+              options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
               placeholder="Select entity"
             />
           </div>

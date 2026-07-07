@@ -164,7 +164,7 @@ export function InternalTransfersPage() {
                 <ComboBox
                   value={form.fromEntityId || ''}
                   onChange={(v) => setForm({ ...form, fromEntityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
                   placeholder="Source"
                 />
               </div>
@@ -175,7 +175,7 @@ export function InternalTransfersPage() {
                 <ComboBox
                   value={form.toEntityId || ''}
                   onChange={(v) => setForm({ ...form, toEntityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
                   placeholder="Destination"
                 />
               </div>

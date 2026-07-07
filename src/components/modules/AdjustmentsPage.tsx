@@ -177,7 +177,7 @@ export function AdjustmentsPage() {
                 <ComboBox
                   value={form.entityId || ''}
                   onChange={(v) => setForm({ ...form, entityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name }))}
+                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
                   placeholder="Select entity"
                 />
               </div>

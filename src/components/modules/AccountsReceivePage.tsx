@@ -29,7 +29,7 @@ export function AccountsReceivePage() {
   const fields: FieldDef[] = [
     {
       name: 'entityId', label: 'Entity', type: 'select', required: true,
-      options: entities.map((e) => ({ value: e.id, label: e.name })),
+      options: entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
     },
     {
       name: 'category', label: 'Receive Type', type: 'select', required: true,

@@ -24,7 +24,7 @@ export function SuppliersPage() {
     { name: 'address', label: 'Address', type: 'textarea', full: true },
     {
       name: 'entityId', label: 'Entity', type: 'select', required: true,
-      options: entities.map((e) => ({ value: e.id, label: e.name })),
+      options: entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
     },
   ]
   // Build nav config inside component so dynamic entity select options are

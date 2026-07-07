@@ -28,7 +28,7 @@ export function ItemSerialsPage() {
     { name: 'barcode', label: 'Per-unit barcode (optional)' },
     {
       name: 'entityId', label: 'Currently At Entity', type: 'select', required: true,
-      options: entities.map((e) => ({ value: e.id, label: e.name })),
+      options: entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
     },
     {
       name: 'status', label: 'Status', type: 'select', default: 'IN_STOCK',

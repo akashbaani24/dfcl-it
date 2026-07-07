@@ -252,7 +252,7 @@ export function EmployeeEditPage() {
                     onChange={(v) => setForm({ ...form, entityId: v === '__NONE__' ? '' : v })}
                     options={[
                       { value: '__NONE__', label: '— No Entity —' },
-                      ...entities.map((e) => ({ value: e.id, label: e.name })),
+                      ...entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
                     ]}
                     placeholder="Select entity"
                   />
