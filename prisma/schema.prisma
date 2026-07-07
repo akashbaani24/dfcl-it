@@ -113,6 +113,8 @@ model Employee {
   designation  String?
   phone        String?
   email        String?
+  photo        String?  // base64 data URL of employee photo
+  address      String?
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id])
   entityId     String
@@ -404,6 +406,7 @@ model Purchase {
   approvedAt      DateTime?
   createdBy       String?
   notes           String?
+  attachments     String?  // JSON array of base64 data URLs (receipts, invoices, etc.)
   items           PurchaseItem[]
   returns         PurchaseReturn[]
   receives        PurchaseReceive[]
@@ -658,6 +661,7 @@ model AccountEntry {
   method      String   @default("CASH") // CASH, BANK, MOBILE
   refType     String?
   refId       String?
+  attachments String?  // JSON array of base64 data URLs (bills, receipts, etc.)
   createdAt   DateTime @default(now())
 
   @@index([entityId])

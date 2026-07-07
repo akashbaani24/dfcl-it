@@ -44,6 +44,24 @@ const MIGRATIONS: Migration[] = [
     sql: 'ALTER TABLE PurchaseItem ADD COLUMN serials TEXT',
     reason: 'Comma-separated serial numbers entered for this purchase line item.',
   },
+  {
+    table: 'Employee',
+    column: 'photo',
+    sql: 'ALTER TABLE Employee ADD COLUMN photo TEXT',
+    reason: 'Base64 data URL of employee photo.',
+  },
+  {
+    table: 'Purchase',
+    column: 'attachments',
+    sql: 'ALTER TABLE Purchase ADD COLUMN attachments TEXT',
+    reason: 'JSON array of base64 data URLs (receipts, invoices, etc.).',
+  },
+  {
+    table: 'AccountEntry',
+    column: 'attachments',
+    sql: 'ALTER TABLE AccountEntry ADD COLUMN attachments TEXT',
+    reason: 'JSON array of base64 data URLs (bills, receipts, etc.).',
+  },
   // Add future migrations here as needed.
 ]
 

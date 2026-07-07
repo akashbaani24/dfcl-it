@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/shared/Sidebar'
 import { NewsTicker } from '@/components/shared/NewsTicker'
 import { LoginPage } from '@/components/shared/LoginPage'
 import { Button } from '@/components/ui/button'
-import { Menu, X, LogOut, User as UserIcon, Loader2, Building2, Bell, MessageCircle, X as XIcon, Send } from 'lucide-react'
+import { Menu, X, LogOut, User as UserIcon, Loader2, Building2, Bell, MessageCircle, X as XIcon, Send, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -56,7 +56,7 @@ import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
 export function AppShell() {
-  const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity } = useApp()
+  const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity, sidebarCollapsed, toggleSidebarCollapsed } = useApp()
   const { user, loading, setAuth, setLoading, logout } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -194,6 +194,10 @@ export function AppShell() {
         <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
           <Menu className="h-5 w-5" />
         </Button>
+        {/* Desktop sidebar toggle — hides/shows the sidebar */}
+        <Button variant="ghost" size="icon" className="hidden md:flex" onClick={toggleSidebarCollapsed} title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+          {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+        </Button>
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded-md bg-gradient-to-br from-purple-500 to-blue-500 text-white flex items-center justify-center text-xs font-bold">DF</div>
           <div className="hidden sm:block">
@@ -275,7 +279,12 @@ export function AppShell() {
       <NewsTicker />
 
       <div className="flex flex-1">
-        <Sidebar />
+        {/* Desktop sidebar — hidden when sidebarCollapsed is true */}
+        {!sidebarCollapsed && (
+          <div className="hidden md:block">
+            <Sidebar />
+          </div>
+        )}
         {/* Mobile drawer */}
         {mobileNavOpen && (
           <div className="md:hidden fixed inset-0 z-50 flex">

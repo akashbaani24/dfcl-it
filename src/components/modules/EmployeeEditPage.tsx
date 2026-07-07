@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Save, KeyRound, ShieldCheck, Trash2 } from 'lucide-react'
+import { FileUpload } from '@/components/ui/file-upload'
 import { list, getOne, update, create } from '@/lib/api'
 import { toast } from 'sonner'
 import { PermissionAction } from '@/lib/auth'
@@ -28,6 +29,7 @@ export function EmployeeEditPage() {
     designation: '',
     phone: '',
     email: '',
+    photo: '' as string | null,
     entityId: '',
     departmentId: '',
     isActive: true,
@@ -69,6 +71,7 @@ export function EmployeeEditPage() {
         designation: r.designation || '',
         phone: r.phone || '',
         email: r.email || '',
+        photo: r.photo || null,
         entityId: r.entityId || '',
         departmentId: r.departmentId || '',
         isActive: r.isActive ?? true,
@@ -261,6 +264,19 @@ export function EmployeeEditPage() {
                   className="mt-1"
                   disabled={!canEdit && !!editingId}
                 />
+              </div>
+              {/* Photo upload */}
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Photo</Label>
+                <div className="mt-1">
+                  <FileUpload
+                    value={form.photo}
+                    onChange={(v) => setForm({ ...form, photo: v as string | null })}
+                    label="Upload Photo"
+                    accept="image/*"
+                    maxSizeMB={2}
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-xs">Entity</Label>

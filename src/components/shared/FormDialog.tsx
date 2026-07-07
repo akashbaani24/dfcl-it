@@ -7,18 +7,21 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ComboBox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
+import { FileUpload } from '@/components/ui/file-upload'
 import { useState, useEffect } from 'react'
 
 export type FieldDef = {
   name: string
   label: string
-  type?: 'text' | 'number' | 'textarea' | 'select' | 'switch' | 'date'
+  type?: 'text' | 'number' | 'textarea' | 'select' | 'switch' | 'date' | 'files' | 'file'
   options?: { value: string; label: string }[]
   required?: boolean
   placeholder?: string
   default?: any
   full?: boolean  // span both columns
   help?: string
+  accept?: string  // for file/files type
+  maxSizeMB?: number  // for file/files type
 }
 
 export function FormDialog({
@@ -46,7 +49,18 @@ export function FormDialog({
     if (open) {
       const d: Record<string, any> = {}
       for (const f of fields) {
-        let v = initial?.[f.name] ?? f.default ?? (f.type === 'switch' ? false : f.type === 'number' ? 0 : '')
+        let v = initial?.[f.name] ?? f.default
+        if (v === undefined) {
+          if (f.type === 'switch') v = false
+          else if (f.type === 'number') v = 0
+          else if (f.type === 'files') v = []
+          else if (f.type === 'file') v = null
+          else v = ''
+        }
+        // For 'files' type, parse from JSON string if needed (when loading from DB)
+        if (f.type === 'files' && typeof v === 'string') {
+          try { v = JSON.parse(v) } catch { v = [] }
+        }
         // For select fields with __NONE__ option, normalize null/empty to sentinel
         if (f.type === 'select' && f.options?.some((o) => o.value === '__NONE__')) {
           if (v === null || v === undefined || v === '') v = '__NONE__'
@@ -65,6 +79,16 @@ export function FormDialog({
       for (const f of fields) {
         if (f.type === 'number') payload[f.name] = Number(payload[f.name]) || 0
         if (f.type === 'switch') payload[f.name] = !!payload[f.name]
+        // 'files' type: serialize array to JSON string for DB storage
+        if (f.type === 'files') {
+          payload[f.name] = Array.isArray(payload[f.name]) && payload[f.name].length > 0
+            ? JSON.stringify(payload[f.name])
+            : undefined
+        }
+        // 'file' type: single string (data URL)
+        if (f.type === 'file') {
+          payload[f.name] = payload[f.name] || undefined
+        }
         // __NONE__ sentinel means "no value"
         if (payload[f.name] === '__NONE__') payload[f.name] = null
       }
@@ -99,6 +123,27 @@ export function FormDialog({
                   className="mt-1"
                   rows={2}
                 />
+              ) : f.type === 'files' ? (
+                <div className="mt-1">
+                  <FileUpload
+                    multiple
+                    value={data[f.name] ?? []}
+                    onChange={(v) => setData({ ...data, [f.name]: v })}
+                    label={f.placeholder || 'Attach Files'}
+                    accept={f.accept || 'image/*,.pdf'}
+                    maxSizeMB={f.maxSizeMB || 5}
+                  />
+                </div>
+              ) : f.type === 'file' ? (
+                <div className="mt-1">
+                  <FileUpload
+                    value={data[f.name] ?? null}
+                    onChange={(v) => setData({ ...data, [f.name]: v })}
+                    label={f.placeholder || 'Upload File'}
+                    accept={f.accept || 'image/*'}
+                    maxSizeMB={f.maxSizeMB || 5}
+                  />
+                </div>
               ) : f.type === 'select' ? (
                 <div className="mt-1">
                   <ComboBox

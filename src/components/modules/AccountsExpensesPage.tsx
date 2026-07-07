@@ -47,6 +47,7 @@ export function AccountsExpensesPage() {
       ],
     },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
+    { name: 'attachments', label: 'Attachments (Bills, Receipts)', type: 'files', full: true, accept: 'image/*,.pdf', maxSizeMB: 5, placeholder: 'Attach Bills/Receipts' },
   ]
 
   // Build nav config inside component so dynamic select options (entities, expense types)

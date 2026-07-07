@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { FileUpload } from '@/components/ui/file-upload'
 import { ComboBox } from '@/components/ui/combobox'
 import { AsyncComboBox } from '@/components/ui/async-combobox'
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react'
@@ -43,6 +44,7 @@ export function PurchaseEntryPage() {
   const [entryBy, setEntryBy] = useState(user?.employee?.name || user?.userId || '')
   const [shippingEntity, setShippingEntity] = useState('')   // Entity (receiving stock)
   const [notes, setNotes] = useState('')
+  const [attachments, setAttachments] = useState<string[]>([])
   const [lines, setLines] = useState<LineItem[]>([])
 
   useEffect(() => {
@@ -84,6 +86,10 @@ export function PurchaseEntryPage() {
       // legacy rows that don't have shippingEntityId set yet.
       setShippingEntity(r.shippingEntityId || r.entityId || '')
       setNotes(r.notes || '')
+      // Load attachments (JSON array of base64 data URLs)
+      try {
+        setAttachments(r.attachments ? JSON.parse(r.attachments) : [])
+      } catch { setAttachments([]) }
       setLines((r.items || []).map((it: any) => ({
         id: it.id,
         itemId: it.itemId,
@@ -191,6 +197,7 @@ export function PurchaseEntryPage() {
         approvedAt: null,
         createdBy: entryBy || undefined,
         notes: notes || undefined,
+        attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
         items: lines.map((l) => ({
           itemId: l.itemId,
           quantity: l.quantity,
@@ -441,6 +448,21 @@ export function PurchaseEntryPage() {
             className="mt-1"
             rows={2}
           />
+        </div>
+
+        {/* Attachments */}
+        <div className="p-3 border-t">
+          <Label className="text-xs font-semibold">Attachments (Receipts, Invoices, etc.)</Label>
+          <div className="mt-1">
+            <FileUpload
+              multiple
+              value={attachments}
+              onChange={(v) => setAttachments(v as string[])}
+              label="Attach Files"
+              accept="image/*,.pdf"
+              maxSizeMB={5}
+            />
+          </div>
         </div>
 
         {/* Action buttons */}

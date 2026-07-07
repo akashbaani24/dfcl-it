@@ -18,6 +18,7 @@ interface AppState {
   selectedEntityId: string | null
   selectedEntityName: string | null
   sidebarOpen: boolean
+  sidebarCollapsed: boolean  // desktop sidebar hide/show toggle
   permissionUserId: string | null
   setActive: (m: ModuleKey) => void
   setCurrentEntity: (id: string | null) => void
@@ -25,6 +26,8 @@ interface AppState {
   clearSelectedEntity: () => void
   toggleSidebar: () => void
   setSidebar: (open: boolean) => void
+  toggleSidebarCollapsed: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
   setPermissionUserId: (id: string | null) => void
   openPermissions: (userId: string) => void
 }
@@ -35,6 +38,7 @@ export const useApp = create<AppState>((set) => ({
   selectedEntityId: null,
   selectedEntityName: null,
   sidebarOpen: true,
+  sidebarCollapsed: false,
   permissionUserId: null,
   setActive: (m) => set({ active: m }),
   setCurrentEntity: (id) => set({ currentEntityId: id }),
@@ -42,6 +46,8 @@ export const useApp = create<AppState>((set) => ({
   clearSelectedEntity: () => set({ selectedEntityId: null, selectedEntityName: null }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebar: (open) => set({ sidebarOpen: open }),
+  toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setPermissionUserId: (id) => set({ permissionUserId: id }),
   openPermissions: (userId) => set({ permissionUserId: userId, active: 'manage-permissions' }),
 }))
