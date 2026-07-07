@@ -211,7 +211,9 @@ export function PurchaseEntryPage() {
       }
 
       if (editingId) {
-        // Editing existing purchase — use normal update
+        // Editing existing purchase — delete old items first, then update
+        // with new items (so expiry dates and other changes are saved)
+        await action('delete-purchase-items', editingId).catch(() => {})
         await update('purchases', editingId, {
           ...payload,
           items: { create: payload.items },

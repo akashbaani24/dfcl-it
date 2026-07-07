@@ -80,6 +80,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(updated)
       }
 
+      case 'delete-purchase-items': {
+        // Delete all PurchaseItems for a given purchase (used when editing
+        // a purchase — old items are deleted, then new items are created
+        // via the update endpoint with items: { create: [...] })
+        const purchaseId = id
+        await db.purchaseItem.deleteMany({ where: { purchaseId } })
+        return NextResponse.json({ ok: true })
+      }
+
       case 'create-purchase-safe': {
         // BULLETPROOF purchase creation with cascading fallback.
         //
