@@ -195,7 +195,22 @@ export async function POST(req: NextRequest) {
       if (safeLog.items) safeLog.items = `[${Array.isArray(data.items?.create) ? data.items.create.length : 0} items]`
       console.error('[resource POST] payload keys:', Object.keys(data || {}))
       console.error('[resource POST] payload (truncated):', JSON.stringify(safeLog).slice(0, 500))
+      // Log each FK field's value for debugging
+      const fkFields = Object.keys(data || {}).filter(k => /Id$/.test(k) || k === 'refId')
+      console.error('[resource POST] FK fields in payload:', fkFields.map(k => `${k}=${data[k] || 'undefined'}`).join(', '))
     } catch {}
+
+    // If this is STILL a FK constraint error (pre-flight missed something),
+    // give the user a clear, actionable message instead of the raw Prisma dump.
+    const msg = e.message || ''
+    if (msg.includes('FOREIGN KEY constraint') || msg.includes('foreign key constraint') || msg.includes('ForeignKeyConstraint')) {
+      return NextResponse.json({
+        error: 'একটি রেফারেন্স ভুল হয়েছে। অনুগ্রহ করে পেজ রিফ্রেশ করে আবার চেষ্টা করুন — Entity, Supplier, এবং Item সঠিকভাবে নির্বাচন করুন। (A referenced record does not exist. Please refresh the page and reselect Entity/Supplier/Item.)',
+        slug,
+        hint: 'Check server logs for which FK field is invalid',
+      }, { status: 400 })
+    }
+
     return NextResponse.json({ error: e.message, slug, hint: 'Check server logs for which FK field is invalid' }, { status: 500 })
   }
 }
