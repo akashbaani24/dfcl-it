@@ -78,16 +78,28 @@ export async function GET(req: NextRequest) {
           },
         },
         entity: { select: { id: true, name: true } },
-        purchase: { select: { id: true, purchaseNo: true } },
+        // NOTE: ItemSerial does NOT have a 'purchase' relation — only a
+        // purchaseId field. We fetch the purchase number separately below.
       },
       orderBy: { createdAt: 'desc' },
       take: 500, // limit to prevent huge responses
     })
 
-    // Also fetch the receive numbers for these serials
+    // Fetch purchase numbers and receive numbers separately (ItemSerial
+    // has purchaseId as a plain field, NOT a relation).
     const purchaseIds = [...new Set(serials.map(s => s.purchaseId).filter(Boolean))]
+    let purchaseNoMap: Record<string, string> = {}
     let receiveNoMap: Record<string, string> = {}
     if (purchaseIds.length > 0) {
+      // Fetch purchase numbers
+      const purchases = await db.purchase.findMany({
+        where: { id: { in: purchaseIds } },
+        select: { id: true, purchaseNo: true },
+      })
+      for (const p of purchases) {
+        purchaseNoMap[p.id] = p.purchaseNo
+      }
+      // Fetch receive numbers
       const receives = await db.purchaseReceive.findMany({
         where: { purchaseId: { in: purchaseIds } },
         select: { id: true, receiveNo: true, purchaseId: true },
@@ -107,7 +119,7 @@ export async function GET(req: NextRequest) {
       uom: s.item?.uom?.shortCode || '—',
       entity: s.entity?.name || '—',
       status: s.status,
-      purchaseNo: s.purchase?.purchaseNo || '',
+      purchaseNo: s.purchaseId ? (purchaseNoMap[s.purchaseId] || '') : '',
       receiveNo: s.purchaseId ? (receiveNoMap[s.purchaseId] || '') : '',
       createdAt: s.createdAt,
     }))
