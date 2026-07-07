@@ -69,6 +69,25 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Fetch expiry dates from PurchaseItem for items that have stock.
+  // We get the most recent (latest) expiry date per item — if an item was
+  // purchased multiple times with different expiry dates, we show the latest.
+  const stockItemIds = Object.keys(balanceMap).filter(id => balanceMap[id] !== 0)
+  let expiryMap: Record<string, string | null> = {}
+  if (stockItemIds.length > 0) {
+    const purchaseItems = await db.purchaseItem.findMany({
+      where: { itemId: { in: stockItemIds }, expiryDate: { not: null } },
+      select: { itemId: true, expiryDate: true },
+      orderBy: { expiryDate: 'desc' },
+    })
+    for (const pi of purchaseItems) {
+      // Keep only the first (latest) expiry date per item
+      if (!expiryMap[pi.itemId] && pi.expiryDate) {
+        expiryMap[pi.itemId] = pi.expiryDate.toISOString()
+      }
+    }
+  }
+
   // Assemble result in memory (no DB calls)
   // Show ALL serials (including BC- barcodes from receive) regardless of hasSerial flag
   const result = items.map((item) => {
@@ -81,6 +100,8 @@ export async function GET(req: NextRequest) {
       serials: includeSerials ? itemSerials : [],
       // perEntity only for items that have NO serials at all
       perEntity: all && includeSerials && !hasBarcodeSerials ? (perEntityMap[item.id] || []) : [],
+      // Expiry/warranty expiry date from the most recent PurchaseItem
+      expiryDate: expiryMap[item.id] || null,
     }
   })
 

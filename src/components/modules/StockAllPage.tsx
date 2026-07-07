@@ -25,6 +25,7 @@ type StockRow = {
   qty: number
   uom: string
   isSerial: boolean
+  expiryDate: string
 }
 
 // Build display rows from the stockView API response.
@@ -62,6 +63,7 @@ function buildRows(
           qty: 1,
           uom: uomShort,
           isSerial: true,
+          expiryDate: r.expiryDate || "",
         })
       }
       continue
@@ -83,6 +85,7 @@ function buildRows(
         qty: balance,
         uom: uomShort,
         isSerial: false,
+          expiryDate: r.expiryDate || "",
       })
     } else {
       const perEntity: any[] = r.perEntity || []
@@ -100,6 +103,8 @@ function buildRows(
             qty: pe.quantity || 0,
             uom: uomShort,
             isSerial: false,
+          expiryDate: r.expiryDate || "",
+          expiryDate: r.expiryDate || "",
           })
         }
       } else if ((r.balance || 0) > 0) {
@@ -116,6 +121,8 @@ function buildRows(
           qty: r.balance,
           uom: uomShort,
           isSerial: false,
+          expiryDate: r.expiryDate || "",
+          expiryDate: r.expiryDate || "",
         })
       }
     }
@@ -253,10 +260,26 @@ export function StockAllPage() {
                     <TableHead>Serial Number</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead>UoM</TableHead>
+                    <TableHead>Expiry / Warranty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r, idx) => (
+                  {filtered.map((r, idx) => {
+                    const expiryColor = (() => {
+                      if (!r.expiryDate) return 'text-muted-foreground'
+                      const d = new Date(r.expiryDate)
+                      const now = new Date()
+                      const daysLeft = Math.floor((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                      if (daysLeft < 0) return 'text-red-600 font-medium'
+                      if (daysLeft <= 30) return 'text-amber-600 font-medium'
+                      return 'text-green-600'
+                    })()
+                    const fmtExpiry = (dateStr: string) => {
+                      if (!dateStr) return '—'
+                      try { return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
+                      catch { return '—' }
+                    }
+                    return (
                     <TableRow key={r.key}>
                       <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell>
@@ -275,8 +298,12 @@ export function StockAllPage() {
                       <TableCell className="font-mono text-xs whitespace-nowrap">{r.serialNumber}</TableCell>
                       <TableCell className="text-right font-bold">{r.qty}</TableCell>
                       <TableCell>{r.uom}</TableCell>
+                      <TableCell className={`text-xs whitespace-nowrap ${expiryColor}`}>
+                        {fmtExpiry(r.expiryDate)}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -25,6 +25,16 @@ type StockRow = {
   qty: number
   uom: string
   isSerial: boolean
+  expiryDate: string
+}
+
+function fmtExpiry(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  try {
+    const d = new Date(dateStr)
+    // Red if expired, amber if within 30 days, green otherwise
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch { return '—' }
 }
 
 function buildRows(
@@ -39,12 +49,11 @@ function buildRows(
     if (!item) continue
     const uomShort = item.uom?.shortCode || '—'
     const itemBarcode = item.barcode || '—'
+    const expiry = r.expiryDate || ''
 
     // Serial-tracked items: one row per IN_STOCK serial (API already filters by entity)
     const inStockSerials = (r.serials || []).filter((s: any) => s.status === "IN_STOCK")
     if (inStockSerials.length > 0) {
-      
-      
       for (const s of inStockSerials) {
         if (s.status && s.status !== 'IN_STOCK') continue
         rows.push({
@@ -59,6 +68,7 @@ function buildRows(
           qty: 1,
           uom: uomShort,
           isSerial: true,
+          expiryDate: expiry,
         })
       }
       continue
@@ -79,6 +89,7 @@ function buildRows(
       qty: balance,
       uom: uomShort,
       isSerial: false,
+      expiryDate: expiry,
     })
   }
   return rows
@@ -226,10 +237,21 @@ export function StockMinePage() {
                     <TableHead>Serial Number</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead>UoM</TableHead>
+                    <TableHead>Expiry / Warranty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r, idx) => (
+                  {filtered.map((r, idx) => {
+                    const expiryColor = (() => {
+                      if (!r.expiryDate) return 'text-muted-foreground'
+                      const d = new Date(r.expiryDate)
+                      const now = new Date()
+                      const daysLeft = Math.floor((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                      if (daysLeft < 0) return 'text-red-600 font-medium'
+                      if (daysLeft <= 30) return 'text-amber-600 font-medium'
+                      return 'text-green-600'
+                    })()
+                    return (
                     <TableRow key={r.key}>
                       <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell>
@@ -248,8 +270,12 @@ export function StockMinePage() {
                       <TableCell className="font-mono text-xs whitespace-nowrap">{r.serialNumber}</TableCell>
                       <TableCell className="text-right font-bold">{r.qty}</TableCell>
                       <TableCell>{r.uom}</TableCell>
+                      <TableCell className={`text-xs whitespace-nowrap ${expiryColor}`}>
+                        {fmtExpiry(r.expiryDate)}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

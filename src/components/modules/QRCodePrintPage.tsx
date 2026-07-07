@@ -24,6 +24,7 @@ type SearchResult = {
   status: string
   purchaseNo: string
   receiveNo: string
+  expiryDate: string | null
   createdAt: string
 }
 
@@ -348,6 +349,7 @@ function QRLabel({ item }: { item: SearchResult }) {
       `Serial: ${item.serialNumber || '—'}`,
       `Barcode: ${item.barcode || '—'}`,
       `Qty: ${item.qty} ${item.uom}`,
+      `Expiry/Warranty: ${item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : '—'}`,
     ]
     return lines.join('\n')
   }, [item])

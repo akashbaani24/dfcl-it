@@ -109,20 +109,50 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const rows = serials.map((s) => ({
-      id: s.id,
-      itemName: s.item?.name || '—',
-      itemCode: s.item?.itemCode || '—',
-      barcode: s.barcode || '',
-      serialNumber: s.serialNumber || '',
-      qty: 1, // each ItemSerial = 1 unit
-      uom: s.item?.uom?.shortCode || '—',
-      entity: s.entity?.name || '—',
-      status: s.status,
-      purchaseNo: s.purchaseId ? (purchaseNoMap[s.purchaseId] || '') : '',
-      receiveNo: s.purchaseId ? (receiveNoMap[s.purchaseId] || '') : '',
-      createdAt: s.createdAt,
-    }))
+    // Fetch expiry dates from PurchaseItem for these items+purchases
+    const itemPurchasePairs = serials
+      .filter(s => s.itemId && s.purchaseId)
+      .map(s => ({ itemId: s.itemId, purchaseId: s.purchaseId! }))
+    let expiryMap: Record<string, string | null> = {}
+    if (itemPurchasePairs.length > 0) {
+      // Fetch all relevant PurchaseItems and build a lookup by itemId+purchaseId
+      const itemIds = [...new Set(itemPurchasePairs.map(p => p.itemId))]
+      const purchaseIdsForExpiry = [...new Set(itemPurchasePairs.map(p => p.purchaseId))]
+      const purchaseItemsForExpiry = await db.purchaseItem.findMany({
+        where: {
+          itemId: { in: itemIds },
+          purchaseId: { in: purchaseIdsForExpiry },
+          expiryDate: { not: null },
+        },
+        select: { itemId: true, purchaseId: true, expiryDate: true },
+        orderBy: { expiryDate: 'desc' },
+      })
+      for (const pi of purchaseItemsForExpiry) {
+        const key = `${pi.itemId}|${pi.purchaseId}`
+        if (!expiryMap[key] && pi.expiryDate) {
+          expiryMap[key] = pi.expiryDate.toISOString()
+        }
+      }
+    }
+
+    const rows = serials.map((s) => {
+      const expiryKey = s.itemId && s.purchaseId ? `${s.itemId}|${s.purchaseId}` : ''
+      return {
+        id: s.id,
+        itemName: s.item?.name || '—',
+        itemCode: s.item?.itemCode || '—',
+        barcode: s.barcode || '',
+        serialNumber: s.serialNumber || '',
+        qty: 1, // each ItemSerial = 1 unit
+        uom: s.item?.uom?.shortCode || '—',
+        entity: s.entity?.name || '—',
+        status: s.status,
+        purchaseNo: s.purchaseId ? (purchaseNoMap[s.purchaseId] || '') : '',
+        receiveNo: s.purchaseId ? (receiveNoMap[s.purchaseId] || '') : '',
+        expiryDate: expiryMap[expiryKey] || null,
+        createdAt: s.createdAt,
+      }
+    })
 
     return NextResponse.json(rows)
   } catch (e: any) {
