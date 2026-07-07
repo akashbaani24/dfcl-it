@@ -10,15 +10,19 @@ export type ModuleKey =
   | 'accounts-expenses' | 'accounts-receive'
   | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
   | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit' | 'account-types'
-  | 'generic-add-edit' | 'bank-infos' | 'purchase-entry'
+  | 'generic-add-edit' | 'bank-infos' | 'purchase-entry' | 'entity-selection'
 
 interface AppState {
   active: ModuleKey
   currentEntityId: string | null
+  selectedEntityId: string | null
+  selectedEntityName: string | null
   sidebarOpen: boolean
-  permissionUserId: string | null  // user being managed in Manage Permissions page
+  permissionUserId: string | null
   setActive: (m: ModuleKey) => void
   setCurrentEntity: (id: string | null) => void
+  setSelectedEntity: (id: string, name: string) => void
+  clearSelectedEntity: () => void
   toggleSidebar: () => void
   setSidebar: (open: boolean) => void
   setPermissionUserId: (id: string | null) => void
@@ -28,10 +32,14 @@ interface AppState {
 export const useApp = create<AppState>((set) => ({
   active: 'dashboard',
   currentEntityId: null,
+  selectedEntityId: null,
+  selectedEntityName: null,
   sidebarOpen: true,
   permissionUserId: null,
   setActive: (m) => set({ active: m }),
   setCurrentEntity: (id) => set({ currentEntityId: id }),
+  setSelectedEntity: (id, name) => set({ selectedEntityId: id, selectedEntityName: name }),
+  clearSelectedEntity: () => set({ selectedEntityId: null, selectedEntityName: null }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebar: (open) => set({ sidebarOpen: open }),
   setPermissionUserId: (id) => set({ permissionUserId: id }),

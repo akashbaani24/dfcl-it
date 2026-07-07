@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/shared/Sidebar'
 import { NewsTicker } from '@/components/shared/NewsTicker'
 import { LoginPage } from '@/components/shared/LoginPage'
 import { Button } from '@/components/ui/button'
-import { Menu, X, LogOut, User as UserIcon, Loader2 } from 'lucide-react'
+import { Menu, X, LogOut, User as UserIcon, Loader2, Building2 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -48,10 +48,11 @@ import { ItemEditPage } from '@/components/modules/ItemEditPage'
 import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
 import { BankInfosPage } from '@/components/modules/BankInfosPage'
 import { PurchaseEntryPage } from '@/components/modules/PurchaseEntryPage'
+import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
 export function AppShell() {
-  const { active, sidebarOpen, toggleSidebar, setActive } = useApp()
+  const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity } = useApp()
   const { user, loading, setAuth, setLoading, logout } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -98,8 +99,28 @@ export function AppShell() {
 
   if (!user) return <LoginPage />
 
+  // After login, if no entity selected → show entity selection page
+  if (!selectedEntityId) {
+    // Try to restore from sessionStorage first
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('selectedEntityId')
+      const storedName = sessionStorage.getItem('selectedEntityName')
+      if (stored && storedName) {
+        useApp.getState().setSelectedEntity(stored, storedName)
+      } else {
+        return <EntitySelectionPage />
+      }
+    } else {
+      return <EntitySelectionPage />
+    }
+  }
+
   const handleLogout = async () => {
     await logout()
+    clearSelectedEntity()
+    sessionStorage.removeItem('selectedEntityId')
+    sessionStorage.removeItem('selectedEntityName')
+    sessionStorage.removeItem('selectedEntityCode')
     setActive('dashboard')
   }
 
@@ -118,6 +139,15 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex-1" />
+        {/* Selected entity badge */}
+        <button
+          onClick={() => setActive('entity-selection')}
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors text-xs"
+          title="Change entity"
+        >
+          <Building2 className="h-3.5 w-3.5 text-blue-600" />
+          <span className="font-medium text-blue-700">{selectedEntityName || 'Select Entity'}</span>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
@@ -275,6 +305,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'account-types': return <AccountTypesPage />
     case 'bank-infos': return <BankInfosPage />
     case 'purchase-entry': return <PurchaseEntryPage />
+    case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
   }
