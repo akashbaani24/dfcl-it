@@ -6,9 +6,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { list, action, getOne } from '@/lib/api'
+import { list, getOne } from '@/lib/api'
 import { toast } from 'sonner'
-import { Eye, CheckCircle2, Printer, X } from 'lucide-react'
+import { Eye, Printer, X } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 
@@ -107,16 +107,6 @@ export function InternalTransfersPage() {
     return () => clearInterval(interval)
   }, [viewing, fetchReceivers])
 
-  const receive = async (id: string) => {
-    if (!confirm('Mark this transfer as received? Stock will be moved to destination entity.')) return
-    try {
-      await action('receive-transfer', id)
-      toast.success('Transfer received. Stock moved.')
-      load()
-      setViewing(null)
-    } catch (e: any) { toast.error(e.message) }
-  }
-
   return (
     <div>
       <PageHeader
@@ -173,10 +163,7 @@ export function InternalTransfersPage() {
                     <TableCell>{new Date(r.transferDate).toLocaleDateString()}</TableCell>
                     <TableCell><Badge status={r.status} /></TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}><Eye className="h-3.5 w-3.5" /></Button>
-                      {r.status === 'PENDING' && perm.canUpdate && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => receive(r.id)}><CheckCircle2 className="h-3.5 w-3.5" /></Button>
-                      )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)} title="View details"><Eye className="h-3.5 w-3.5" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -315,10 +302,11 @@ export function InternalTransfersPage() {
             <Button variant="outline" onClick={() => openChallan(viewing)} className="gap-1">
               <Printer className="h-4 w-4" /> Print Challan
             </Button>
-            {viewing?.status === 'PENDING' && perm.canUpdate && (
-              <Button onClick={() => receive(viewing.id)} className="gap-1">
-                <CheckCircle2 className="h-4 w-4" /> Mark Received
-              </Button>
+            {viewing?.status === 'PENDING' && (
+              <div className="text-xs text-amber-600 flex items-center gap-1 ml-auto">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Pending — destination entity will receive via Internal Receive page
+              </div>
             )}
           </DialogFooter>
         </DialogContent>
