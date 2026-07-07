@@ -430,6 +430,7 @@ model PurchaseItem {
   unitPrice   Float
   totalPrice  Float
   serials     String?  // comma-separated serial numbers entered for this line
+  expiryDate  DateTime? // optional expiry/warranty expiry date per line item
 
   @@index([purchaseId])
   @@index([itemId])

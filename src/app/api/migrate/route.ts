@@ -62,6 +62,12 @@ const MIGRATIONS: Migration[] = [
     sql: 'ALTER TABLE AccountEntry ADD COLUMN attachments TEXT',
     reason: 'JSON array of base64 data URLs (bills, receipts, etc.).',
   },
+  {
+    table: 'PurchaseItem',
+    column: 'expiryDate',
+    sql: 'ALTER TABLE PurchaseItem ADD COLUMN expiryDate DATETIME',
+    reason: 'Optional expiry/warranty expiry date per purchase line item.',
+  },
   // Add future migrations here as needed.
 ]
 

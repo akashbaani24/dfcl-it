@@ -21,6 +21,7 @@ type LineItem = {
   quantity: number
   unitPrice: number
   total: number
+  expiryDate: string  // optional expiry/warranty expiry date (YYYY-MM-DD)
 }
 
 export function PurchaseEntryPage() {
@@ -98,6 +99,7 @@ export function PurchaseEntryPage() {
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.totalPrice,
+        expiryDate: it.expiryDate ? new Date(it.expiryDate).toISOString().slice(0, 10) : '',
       })))
     }).catch(() => { toast.error('Failed to load'); setLoading(false) })
   }, [editingId])
@@ -121,6 +123,7 @@ export function PurchaseEntryPage() {
       quantity: 1,
       unitPrice: 0,
       total: 0,
+      expiryDate: '',
     }])
   }
 
@@ -203,6 +206,7 @@ export function PurchaseEntryPage() {
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           totalPrice: l.total,
+          expiryDate: l.expiryDate ? new Date(l.expiryDate + 'T00:00:00.000Z').toISOString() : undefined,
         })),
       }
 
@@ -366,6 +370,7 @@ export function PurchaseEntryPage() {
                 <th className="px-3 py-2 text-left font-semibold text-xs w-24">UoM</th>
                 <th className="px-3 py-2 text-left font-semibold text-xs w-32">Unit Price</th>
                 <th className="px-3 py-2 text-left font-semibold text-xs w-32">Total</th>
+                <th className="px-3 py-2 text-left font-semibold text-xs w-36">Expiry / Warranty Date</th>
                 <th className="px-3 py-2 w-10"></th>
               </tr>
             </thead>
@@ -406,6 +411,14 @@ export function PurchaseEntryPage() {
                   <td className="px-3 py-2 font-medium">
                     ৳{(l.total || 0).toFixed(2)}
                   </td>
+                  <td className="px-3 py-2">
+                    <Input
+                      type="date"
+                      value={l.expiryDate}
+                      onChange={(e) => updateLine(l.id, { expiryDate: e.target.value })}
+                      className="h-8 w-32 text-xs"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-center">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeLine(l.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
@@ -422,7 +435,7 @@ export function PurchaseEntryPage() {
               )}
               {/* Grand Total row */}
               <tr className="bg-slate-100 font-bold">
-                <td colSpan={4} className="px-3 py-2 text-right text-xs">Grand Total →</td>
+                <td colSpan={5} className="px-3 py-2 text-right text-xs">Grand Total →</td>
                 <td className="px-3 py-2 text-right text-xs">Total</td>
                 <td className="px-3 py-2">৳{grandTotal.toFixed(2)}</td>
                 <td></td>
