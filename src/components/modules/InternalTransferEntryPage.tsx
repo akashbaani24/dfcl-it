@@ -269,11 +269,16 @@ export function InternalTransferEntryPage() {
         transferDate: new Date(transferDate + 'T00:00:00.000Z').toISOString(),
         notes: notes || undefined,
         status: 'PENDING',
-        items: lines.map((l) => ({
-          itemId: l.itemId,
-          quantity: l.quantity,
-          serials: l.barcodes.length > 0 ? l.barcodes.join(',') : null,
-        })),
+        // Prisma expects nested create: items: { create: [...] }
+        // NOT items: [...] directly (that fails with "Invalid value provided.
+        // Expected ...UncheckedCreateNestedManyWithoutTransferInput")
+        items: {
+          create: lines.map((l) => ({
+            itemId: l.itemId,
+            quantity: l.quantity,
+            serials: l.barcodes.length > 0 ? l.barcodes.join(',') : null,
+          })),
+        },
       }
 
       const r = await create('internal-transfers', payload)
