@@ -10,7 +10,7 @@ export type ModuleKey =
   | 'accounts-expenses' | 'accounts-receive'
   | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
   | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit' | 'account-types'
-  | 'generic-add-edit' | 'bank-infos'
+  | 'generic-add-edit' | 'bank-infos' | 'purchase-entry'
 
 interface AppState {
   active: ModuleKey

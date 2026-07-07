@@ -14,10 +14,12 @@ import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 import { toast } from 'sonner'
-import { CheckCircle2, Eye, ScanLine } from 'lucide-react'
+import { CheckCircle2, Eye, ScanLine, Pencil } from 'lucide-react'
+import { useApp } from '@/lib/store'
 
 export function PurchasesPage() {
   const perm = usePerm('purchases')
+  const { setActive } = useApp()
   const [rows, setRows] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
@@ -51,9 +53,14 @@ export function PurchasesPage() {
   }, [q, rows])
 
   const startNew = () => {
-    setForm({ entityId: '', supplierId: '', invoiceNo: '', purchaseDate: new Date().toISOString().slice(0, 10), notes: '' })
-    setLines([])
-    setOpen(true)
+    // Navigate to full-page purchase entry form
+    sessionStorage.removeItem('editingPurchaseId')
+    setActive('purchase-entry')
+  }
+
+  const startEdit = (row: any) => {
+    sessionStorage.setItem('editingPurchaseId', row.id)
+    setActive('purchase-entry')
   }
 
   const totalAmount = lines.reduce((s, l) => s + (l.totalPrice || 0), 0)
@@ -176,6 +183,11 @@ export function PurchasesPage() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
+                        {perm.canEdit && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         {r.status === 'PENDING' && perm.canUpdate && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" onClick={() => approve(r.id)}>
                             <CheckCircle2 className="h-3.5 w-3.5" />
