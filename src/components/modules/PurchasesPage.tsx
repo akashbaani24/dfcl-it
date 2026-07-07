@@ -136,7 +136,7 @@ export function PurchasesPage() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)} title="View details">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {perm.canEdit && (
+                        {perm.canEdit && (r.status === 'SENT_BACK' || r.status === 'SUBMITTED') && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)} title="Edit">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -202,12 +202,17 @@ export function PurchasesPage() {
               </TableBody>
             </Table>
           </div>
-          {perm.canEdit && (
+          {perm.canEdit && (viewing?.status === 'SENT_BACK' || viewing?.status === 'SUBMITTED') && (
             <div className="flex justify-end gap-2 mt-2">
               <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
               <Button onClick={() => { const v = viewing; setViewing(null); startEdit(v) }}>
                 <Pencil className="h-4 w-4 mr-1" /> Edit
               </Button>
+            </div>
+          )}
+          {perm.canEdit && viewing?.status !== 'SENT_BACK' && viewing?.status !== 'SUBMITTED' && (
+            <div className="flex justify-end gap-2 mt-2">
+              <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
             </div>
           )}
         </DialogContent>
