@@ -7,7 +7,7 @@ import {
   TrendingDown, TrendingUp,
   FileBarChart, ClipboardCheck, Tags, ScanLine,
   Image as ImageIcon,
-  Printer,
+  Printer, QrCode,
 } from 'lucide-react'
 import { ModuleKey } from '@/lib/store'
 
@@ -96,6 +96,7 @@ export const SECTIONS: Section[] = [
     icon: Printer,
     items: [
       { key: 'barcode-print', label: 'Barcode Print', icon: Printer },
+      { key: 'qr-code-print', label: 'QR Code Print', icon: QrCode },
     ],
   },
 ]

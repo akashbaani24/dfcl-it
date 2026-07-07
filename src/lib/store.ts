@@ -11,7 +11,7 @@ export type ModuleKey =
   | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
   | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit' | 'account-types'
   | 'generic-add-edit' | 'bank-infos' | 'purchase-entry' | 'entity-selection'
-  | 'sales-entry' | 'internal-transfer-entry' | 'internal-receive-entry' | 'barcode-print'
+  | 'sales-entry' | 'internal-transfer-entry' | 'internal-receive-entry' | 'barcode-print' | 'qr-code-print'
 
 interface AppState {
   active: ModuleKey
