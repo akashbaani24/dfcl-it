@@ -266,14 +266,19 @@ export function buildWhere(query: Record<string, any>): any {
  * This is a defensive backstop. Client-side validation should still catch
  * missing required FK fields first — but if it ever slips through, the API
  * will fail gracefully instead of corrupting the database.
+ *
+ * ADDITIONAL SAFETY: also nulls out whitespace-only strings (`'   '`) on
+ * FK-like fields, since those would also fail FK validation. And also
+ * strips empty strings on `refId` (which doesn't end in `Id` but is a
+ * common FK-like polymorphic field in this schema).
  */
 export function sanitizePayload<T extends Record<string, any>>(payload: T): T {
   if (!payload || typeof payload !== 'object') return payload
   const out: Record<string, any> = Array.isArray(payload) ? [] : {}
 
   for (const [key, value] of Object.entries(payload)) {
-    // Empty string on an FK-looking field → undefined
-    if (value === '' && isFkLike(key)) {
+    // Empty/whitespace string on an FK-looking field → undefined
+    if (typeof value === 'string' && value.trim() === '' && isFkLike(key)) {
       out[key] = undefined
       continue
     }
@@ -299,5 +304,6 @@ function isFkLike(fieldName: string): boolean {
   // shippingEntityId, supplierId, itemId, categoryId, purchaseId,
   // fromEntityId, toEntityId, saleId, returnId, refundId, transferId,
   // receiveId, parentId, departmentId, employeeId, userId, etc.
-  return /Id$/.test(fieldName)
+  // Also catches `refId` (polymorphic FK used by StockTransaction, etc.).
+  return /Id$/.test(fieldName) || fieldName === 'refId'
 }

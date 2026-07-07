@@ -171,11 +171,136 @@ export async function POST(req: NextRequest) {
     if (cfg.autoNumberField && cfg.autoNumberPrefix && !payload[cfg.autoNumberField]) {
       payload[cfg.autoNumberField] = await generateNumber(cfg.autoNumberPrefix)
     }
+
+    // Pre-flight: validate that all FK references in the payload actually
+    // exist in the database BEFORE attempting the create. This turns the
+    // confusing "FOREIGN KEY constraint failed" error into a clear message
+    // like "Item with id 'xyz' does not exist" — much easier to debug.
+    const fkError = await validateFkReferences(slug, payload)
+    if (fkError) {
+      console.error('[resource POST] FK validation failed:', fkError)
+      return NextResponse.json({ error: fkError, slug }, { status: 400 })
+    }
+
     const row = await model.create({ data: payload, include: cfg.include })
     return NextResponse.json(row)
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    // Log the full error + payload (minus line items) so we can diagnose
+    // exactly which FK field is failing. The generic SQLite FK error doesn't
+    // tell you which column is the problem, so this log is critical.
+    console.error('[resource POST] create failed for slug=', slug)
+    console.error('[resource POST] error:', e.message)
+    try {
+      const safeLog = { ...data }
+      if (safeLog.items) safeLog.items = `[${Array.isArray(data.items?.create) ? data.items.create.length : 0} items]`
+      console.error('[resource POST] payload keys:', Object.keys(data || {}))
+      console.error('[resource POST] payload (truncated):', JSON.stringify(safeLog).slice(0, 500))
+    } catch {}
+    return NextResponse.json({ error: e.message, slug, hint: 'Check server logs for which FK field is invalid' }, { status: 500 })
   }
+}
+
+/**
+ * Pre-flight FK validation: walk the sanitized payload and verify that
+ * every FK-looking field (ending in `Id` or named `refId`) points to a row
+ * that actually exists in the corresponding table.
+ *
+ * Map FK field name → Prisma model name. Most fields follow the convention
+ * `xxxId` → model `xxx` (lowercased first letter). Special cases handled below.
+ *
+ * Returns a human-readable error string if any FK is invalid, or null if OK.
+ */
+async function validateFkReferences(slug: string, payload: any): Promise<string | null> {
+  if (!payload || typeof payload !== 'object') return null
+
+  // Walk the payload collecting all FK references
+  const refs: Array<{ field: string; id: string; model: string; context: string }> = []
+
+  function collect(obj: any, context: string) {
+    if (!obj || typeof obj !== 'object') return
+    if (Array.isArray(obj)) {
+      obj.forEach((item, i) => collect(item, `${context}[${i}]`))
+      return
+    }
+    for (const [key, value] of Object.entries(obj)) {
+      // For nested create/update/connect wrappers like { items: { create: [...] } },
+      // recurse into ALL object values (not just `items`), so we catch FK fields
+      // inside line items (e.g. itemId inside items.create[]).
+      if (typeof value === 'string' && value && (/Id$/.test(key) || key === 'refId')) {
+        const modelName = fkFieldToModel(key)
+        if (modelName) {
+          refs.push({ field: key, id: value, model: modelName, context })
+        }
+      } else if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        // Recurse into nested objects (e.g. items: { create: [...] })
+        collect(value, `${context}.${key}`)
+      } else if (Array.isArray(value)) {
+        // Recurse into arrays (handled at top of next call)
+        collect(value, `${context}.${key}`)
+      }
+    }
+  }
+
+  collect(payload, slug)
+
+  // Verify each reference exists in the DB
+  for (const ref of refs) {
+    try {
+      // @ts-expect-error dynamic model access
+      const m = db[ref.model]
+      if (!m || !m.findUnique) continue
+      const row = await m.findUnique({ where: { id: ref.id }, select: { id: true } })
+      if (!row) {
+        return `${ref.field}="${ref.id}" does not exist in ${ref.model} (at ${ref.context}). ` +
+               `Please refresh the page and reselect the ${ref.field.replace(/Id$/, '').toLowerCase()}.`
+      }
+    } catch (e: any) {
+      // If the model lookup fails for some reason, skip pre-flight and let Prisma handle it
+      console.error('[validateFkReferences] skip', ref, e.message)
+    }
+  }
+  return null
+}
+
+/**
+ * Map an FK field name to its Prisma model name.
+ * e.g. entityId → entity, supplierId → supplier, shippingEntityId → shippingEntity (special),
+ * itemId → item, etc.
+ */
+function fkFieldToModel(field: string): string | null {
+  // Special cases (composite / non-standard). null means "skip pre-flight
+  // for this field" — used when the field is polymorphic or context-dependent.
+  const specials: Record<string, string | null> = {
+    shippingEntityId: 'entity',
+    fromEntityId: 'entity',
+    toEntityId: 'entity',
+    purchaseItemId: 'purchaseItem',
+    saleId: 'sales',
+    salesId: 'sales',
+    returnId: null,        // ambiguous: salesReturn or purchaseReturn
+    refundId: 'salesRefund',
+    transferId: 'internalTransfer',
+    receiveId: null,       // ambiguous: purchaseReceive or internalReceive
+    refId: null,           // polymorphic — skip pre-flight
+    parentId: null,        // ambiguous: entity self-ref or category self-ref
+    categoryId: 'category',
+    departmentId: 'department',
+    employeeId: 'employee',
+    userId: 'user',
+    uomId: 'uoM',
+    supplierId: 'supplier',
+    entityId: 'entity',
+    itemId: 'item',
+    purchaseId: 'purchase',
+    requisitionId: 'purchaseRequisition',
+  }
+  if (field in specials) return specials[field]
+  // Generic: xxxId → xxx (lowercase first char)
+  if (/Id$/.test(field)) {
+    const base = field.slice(0, -2)
+    return base.charAt(0).toLowerCase() + base.slice(1)
+  }
+  return null
 }
 
 export async function PATCH(req: NextRequest) {
