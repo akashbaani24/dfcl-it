@@ -33,12 +33,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id: user.id, userId: user.userId, role: user.role })
 }
 
-// Update password / role
+// Update password / role / userId / isActive
 export async function PATCH(req: NextRequest) {
   const body = await req.json()
-  const { id, password, role, isActive } = body
+  const { id, userId, password, role, isActive } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const data: any = {}
+  // Support updating userId (username) — check uniqueness first
+  if (userId) {
+    const existing = await db.user.findUnique({ where: { userId } })
+    if (existing && existing.id !== id) {
+      return NextResponse.json({ error: 'User ID already taken by another user' }, { status: 400 })
+    }
+    data.userId = userId
+  }
   if (password) data.password = hashPassword(password)
   if (role) data.role = role
   if (typeof isActive === 'boolean') data.isActive = isActive

@@ -31,7 +31,12 @@ export function InternalReceivePage() {
     try {
       const [r, t] = await Promise.all([
         list('internal-receives') as Promise<any[]>,
-        list('internal-transfers', { status: 'PENDING' }) as Promise<any[]>,
+        // Fetch only transfers where THIS entity is the destination (To Entity).
+        // The ?toEntity=1 query param tells the API to filter by toEntityId
+        // instead of the default OR (from OR to). This enforces that a
+        // receiving entity only sees transfers coming TO them — they cannot
+        // see transfers between other entities.
+        list('internal-transfers', { status: 'PENDING', toEntity: '1' }) as Promise<any[]>,
       ])
       setReceives(r)
       setPendingTransfers(t)

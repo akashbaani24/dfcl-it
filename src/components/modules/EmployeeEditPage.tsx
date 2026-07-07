@@ -118,20 +118,38 @@ export function EmployeeEditPage() {
   }
 
   const saveLogin = async () => {
-    if (!loginForm.userId || !loginForm.password) {
-      toast.error('User ID & password required')
+    if (!loginForm.userId) {
+      toast.error('User ID is required')
+      return
+    }
+    // Password is required for new logins; optional for existing (leave blank to keep)
+    if (!userLogin && !loginForm.password) {
+      toast.error('Password is required for new login')
       return
     }
     setLoginSaving(true)
     try {
       if (userLogin) {
+        // Update existing login — include userId (now editable), password
+        // (only if provided), and role
+        const patchBody: any = {
+          id: userLogin.id,
+          userId: loginForm.userId,
+          role: loginForm.role,
+        }
+        if (loginForm.password) {
+          patchBody.password = loginForm.password
+        }
         const r = await fetch('/api/auth/register', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: userLogin.id, password: loginForm.password, role: loginForm.role }),
+          body: JSON.stringify(patchBody),
         })
         if (!r.ok) { const d = await r.json(); throw new Error(d.error) }
         toast.success('Login updated')
+        // Refresh user login to reflect the new userId
+        const emp: any = await getOne('employees', editingId!)
+        setUserLogin(emp?.user || null)
       } else if (editingId) {
         const r = await fetch('/api/auth/register', {
           method: 'POST',
@@ -355,8 +373,12 @@ export function EmployeeEditPage() {
                   value={loginForm.userId}
                   onChange={(e) => setLoginForm({ ...loginForm, userId: e.target.value })}
                   className="mt-1"
-                  disabled={!!userLogin}
                 />
+                {userLogin && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    ⚠️ Changing the User ID will update the login username. The user will need to use the new User ID to sign in.
+                  </p>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Password {userLogin && '(leave blank to keep)'}</Label>

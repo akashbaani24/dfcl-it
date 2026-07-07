@@ -78,10 +78,30 @@ export async function GET(req: NextRequest) {
       if (slug === 'entities') {
         where.id = { in: entityFilter }
       } else if (slug === 'internal-transfers') {
-        where.OR = [
-          { fromEntityId: { in: entityFilter } },
-          { toEntityId: { in: entityFilter } },
-        ]
+        // Internal Transfers access control:
+        //   - Default (no filter param): show transfers where the user's
+        //     entity is EITHER the source OR the destination. This is the
+        //     "Transfers" page view — you see what you sent and what you
+        //     will receive.
+        //   - ?toEntity=1: show ONLY transfers where the user's entity is
+        //     the DESTINATION (To Entity). Used by the Internal Receive
+        //     page so destination entities only see transfers coming TO
+        //     them — they cannot see transfers between other entities.
+        //   - ?fromEntity=1: show ONLY transfers where the user's entity
+        //     is the SOURCE (From Entity). Used by the Internal Transfers
+        //     list page to show only outgoing transfers.
+        const toOnly = searchParams.get('toEntity') === '1'
+        const fromOnly = searchParams.get('fromEntity') === '1'
+        if (toOnly) {
+          where.toEntityId = { in: entityFilter }
+        } else if (fromOnly) {
+          where.fromEntityId = { in: entityFilter }
+        } else {
+          where.OR = [
+            { fromEntityId: { in: entityFilter } },
+            { toEntityId: { in: entityFilter } },
+          ]
+        }
       } else {
         where.entityId = { in: entityFilter }
       }

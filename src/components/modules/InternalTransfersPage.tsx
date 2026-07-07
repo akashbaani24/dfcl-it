@@ -29,6 +29,10 @@ export function InternalTransfersPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    // Show only transfers where THIS entity is involved (either as source
+    // or destination). Non-admin users see only their entity's transfers;
+    // admins see all. This is the default OR filter (no toEntity/fromEntity
+    // param).
     try { setRows(await list('internal-transfers') as any[]) }
     finally { setLoading(false) }
   }, [])
