@@ -7,6 +7,7 @@ import {
   TrendingDown, TrendingUp,
   FileBarChart, ClipboardCheck, Tags, ScanLine,
   Image as ImageIcon,
+  Printer,
 } from 'lucide-react'
 import { ModuleKey } from '@/lib/store'
 
@@ -88,6 +89,12 @@ export const SECTIONS: Section[] = [
       { key: 'reports-sales', label: 'Sales Report', icon: Tags },
       { key: 'reports-accounts', label: 'Accounts Report', icon: BarChart3 },
       { key: 'reports-serial', label: 'Serial Status Report', icon: ScanLine },
+    ],
+  },
+  {
+    title: 'Tools',
+    items: [
+      { key: 'barcode-print', label: 'Barcode Print', icon: Printer },
     ],
   },
 ]
