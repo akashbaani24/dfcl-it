@@ -15,14 +15,16 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [imageConfig, setImageConfig] = useState<LoginImageConfig>(null)
+  const [customImage, setCustomImage] = useState<string | null>(null)
 
-  // Fetch admin-configured login image
+  // Fetch admin-configured login image — always show custom image if set
   useEffect(() => {
     fetch('/api/settings?key=loginImage')
       .then(r => r.json())
       .then(data => {
-        if (data && data.imageUrl) setImageConfig(data)
+        if (data && data.imageUrl) {
+          setCustomImage(data.imageUrl)
+        }
       })
       .catch(() => {})
   }, [])
@@ -51,19 +53,6 @@ export function LoginPage() {
     }
   }
 
-  // Determine if image should show based on screen size
-  // We use CSS classes for responsive control instead of JS detection
-  const showImageOnMobile = imageConfig && (imageConfig.showOn === 'mobile' || imageConfig.showOn === 'both')
-  const showImageOnDesktop = imageConfig && (imageConfig.showOn === 'desktop' || imageConfig.showOn === 'both')
-
-  // CSS classes for conditional display
-  // Mobile classes: block on mobile if showImageOnMobile, hidden otherwise
-  // Desktop classes: hidden on mobile, flex on lg if showImageOnDesktop
-  const imageSectionMobileClass = showImageOnMobile ? 'flex' : 'hidden'
-  const imageSectionDesktopClass = showImageOnDesktop ? 'lg:flex' : 'lg:hidden'
-  // If no custom image, show default robot on both
-  const useDefaultRobot = !imageConfig
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6"
       style={{
@@ -82,49 +71,29 @@ export function LoginPage() {
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-center">
 
         {/* ============ LEFT: Image Section ============ */}
-        {/* Custom image: show based on admin config */}
-        {imageConfig && imageConfig.imageUrl && (
-          <div className={`flex-col items-center justify-center order-1 ${imageSectionMobileClass} ${imageSectionDesktopClass}`}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-400/20 blur-3xl rounded-full scale-110" />
-              <img
-                src={imageConfig.imageUrl}
-                alt="Login"
-                className="relative z-10 w-56 h-auto sm:w-64 lg:w-80 drop-shadow-2xl rounded-2xl"
-              />
-            </div>
-            <div className="mt-4 lg:mt-6 text-center">
-              <h2 className="text-white text-xl lg:text-2xl font-bold mb-1 lg:mb-2 drop-shadow-lg">
-                DFCL-IT
-              </h2>
-              <p className="text-blue-100 text-xs lg:text-sm max-w-xs hidden sm:block">
-                Barcode & Serial-based Stock Management System
-              </p>
-            </div>
+        {/* If admin uploaded custom image → show it. Otherwise show default robot. */}
+        <div className="flex flex-col items-center justify-center order-1">
+          <div className="relative">
+            <div className="absolute inset-0 bg-blue-400/20 blur-3xl rounded-full scale-110" />
+            <img
+              src={customImage || '/robot-buddy.png'}
+              alt="DFCL-IT"
+              className="relative z-10 w-56 h-auto sm:w-64 lg:w-80 drop-shadow-2xl rounded-2xl object-contain"
+              onError={(e) => {
+                // If custom image fails to load, fallback to robot
+                (e.target as HTMLImageElement).src = '/robot-buddy.png'
+              }}
+            />
           </div>
-        )}
-
-        {/* Default robot: show when no custom image configured */}
-        {(!imageConfig || !imageConfig.imageUrl) && (
-          <div className="flex flex-col items-center justify-center order-1">
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-400/20 blur-3xl rounded-full scale-110" />
-              <img
-                src="/robot-buddy.png"
-                alt="DFCL-IT Buddy Robot"
-                className="relative z-10 w-56 h-auto sm:w-64 lg:w-80 drop-shadow-2xl rounded-2xl"
-              />
-            </div>
-            <div className="mt-4 lg:mt-6 text-center">
-              <h2 className="text-white text-xl lg:text-2xl font-bold mb-1 lg:mb-2 drop-shadow-lg">
-                DFCL-IT
-              </h2>
-              <p className="text-blue-100 text-xs lg:text-sm max-w-xs hidden sm:block">
-                Barcode & Serial-based Stock Management System — your smart inventory buddy!
-              </p>
-            </div>
+          <div className="mt-4 lg:mt-6 text-center">
+            <h2 className="text-white text-xl lg:text-2xl font-bold mb-1 lg:mb-2 drop-shadow-lg">
+              DFCL-IT
+            </h2>
+            <p className="text-blue-100 text-xs lg:text-sm max-w-xs hidden sm:block">
+              Barcode & Serial-based Stock Management System
+            </p>
           </div>
-        )}
+        </div>
 
         {/* ============ RIGHT: Login Card ============ */}
         <div className="w-full max-w-md mx-auto order-2 lg:order-2">
