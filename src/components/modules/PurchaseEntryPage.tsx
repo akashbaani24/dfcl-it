@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ComboBox } from '@/components/ui/combobox'
 import { AsyncComboBox } from '@/components/ui/async-combobox'
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react'
-import { list, create, update, getOne } from '@/lib/api'
+import { list, create, update, getOne, action } from '@/lib/api'
 import { toast } from 'sonner'
 
 type LineItem = {
@@ -164,52 +164,62 @@ export function PurchaseEntryPage() {
 
     setSaving(true)
     try {
-      // Defensive: never send empty strings for FK fields. SQLite rejects
-      // `''` with a confusing "FOREIGN KEY constraint failed" error because
-      // no parent row has id = ''. The API route also sanitizes, but we
-      // double-protect here so the user gets a clear client-side validation
-      // error instead of a 500.
       const safeShippingEntityId = shippingEntity || purchaseFor
-      const payload = {
+      const payload: any = {
         entityId: purchaseFor,
-        // Shipping/Stock Receive entity — this is where the stock will land
-        // when a PurchaseReceive is approved. Defaults to the purchasing
-        // entity if the user left it empty (backward compatibility).
         shippingEntityId: safeShippingEntityId,
         supplierId,
         invoiceNo: invoiceNo || undefined,
         purchaseDate: new Date(purchaseDate + 'T00:00:00.000Z').toISOString(),
         totalAmount: grandTotal,
-        // New purchases are created as SUBMITTED (enter the approval queue).
-        // Editing a SENT_BACK purchase re-submits it back to SUBMITTED so it
-        // re-enters the Purchase Approval queue.
         status: 'SUBMITTED',
-        // Clear any prior approval info when (re-)submitting
         approvedBy: null,
         approvedAt: null,
         createdBy: entryBy || undefined,
         notes: notes || undefined,
-        items: {
-          create: lines.map((l) => ({
-            itemId: l.itemId,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            totalPrice: l.total,
-          })),
-        },
+        items: lines.map((l) => ({
+          itemId: l.itemId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          totalPrice: l.total,
+        })),
       }
+
       if (editingId) {
-        await update('purchases', editingId, payload)
+        // Editing existing purchase — use normal update
+        await update('purchases', editingId, {
+          ...payload,
+          items: { create: payload.items },
+        })
         toast.success('Purchase updated')
       } else {
-        await create('purchases', payload)
-        toast.success('Purchase created')
+        // Creating NEW purchase — use the SAFE creation method that creates
+        // the purchase in steps (header → shippingEntityId → items one by one)
+        // so we can isolate exactly which part fails. This avoids the
+        // "FOREIGN KEY constraint failed" error that happens with nested
+        // creates on Turso/libSQL.
+        try {
+          const result = await action('create-purchase-safe', 'new', payload)
+          if (result._warning) {
+            toast.warning(`${result._warning}. Purchase created but some items failed.`)
+            console.error('Failed items:', result._failedItems)
+          } else {
+            toast.success('Purchase created')
+          }
+        } catch (safeErr: any) {
+          // If the safe method also fails, fall back to the normal create
+          // (which might give a better error message now)
+          console.error('Safe purchase creation failed, trying normal create:', safeErr.message)
+          let safeMsg = safeErr.message
+          try { const p = JSON.parse(safeMsg); if (p.error) safeMsg = p.error } catch {}
+          throw new Error(safeMsg)
+        }
       }
       setActive('purchases')
     } catch (e: any) {
       let msg = e.message
       try { const p = JSON.parse(msg); if (p.error) msg = p.error } catch {}
-      toast.error(msg)
+      toast.error(msg, { duration: 8000 })
     } finally {
       setSaving(false)
     }

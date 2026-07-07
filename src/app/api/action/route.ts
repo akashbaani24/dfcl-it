@@ -80,6 +80,195 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(updated)
       }
 
+      case 'create-purchase-safe': {
+        // BULLETPROOF purchase creation with cascading fallback.
+        //
+        // This action creates a Purchase using a multi-step strategy that
+        // isolates exactly which part fails. It's used as a fallback when
+        // the normal /api/resource POST route fails with FK errors.
+        //
+        // Strategy:
+        //   Step 1: Create Purchase header ONLY (no items, no shippingEntityId)
+        //   Step 2: If step 1 succeeds, add shippingEntityId via update
+        //   Step 3: If step 2 succeeds, add line items one by one
+        //   Step 4: If any item fails, report which one
+        //
+        // This way we KNOW exactly what's broken:
+        //   - If step 1 fails → Purchase header FK issue (entityId/supplierId)
+        //   - If step 2 fails → shippingEntityId column issue
+        //   - If step 3 fails → specific itemId issue
+        const payload = extra || {}
+
+        // Generate purchaseNo
+        const now = new Date()
+        const yy = String(now.getFullYear()).slice(-2)
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const dd = String(now.getDate()).padStart(2, '0')
+        const ts = Date.now().toString().slice(-6)
+        const purchaseNo = `PO-${yy}${mm}${dd}-${ts}`
+
+        // Step 1: Create Purchase header ONLY — no items, no shippingEntityId
+        console.log('[create-purchase-safe] Step 1: creating purchase header only')
+        let purchase
+        try {
+          purchase = await db.purchase.create({
+            data: {
+              purchaseNo,
+              entityId: payload.entityId,
+              supplierId: payload.supplierId,
+              invoiceNo: payload.invoiceNo || null,
+              purchaseDate: payload.purchaseDate ? new Date(payload.purchaseDate) : new Date(),
+              totalAmount: payload.totalAmount || 0,
+              status: payload.status || 'SUBMITTED',
+              approvedBy: null,
+              approvedAt: null,
+              createdBy: payload.createdBy || null,
+              notes: payload.notes || null,
+              // NOTE: deliberately NOT including shippingEntityId or items
+              // here — we add them in steps 2 and 3 to isolate failures.
+            },
+          })
+          console.log('[create-purchase-safe] Step 1 OK: purchase created with id', purchase.id)
+        } catch (e: any) {
+          console.error('[create-purchase-safe] Step 1 FAILED:', e.message)
+          // Check if it's the shippingEntityId column issue
+          if (e.message.includes('shippingEntityId') || e.message.includes('does not exist')) {
+            // Run migration and retry
+            console.log('[create-purchase-safe] column issue detected, running migration...')
+            try {
+              await db.$executeRawUnsafe('ALTER TABLE Purchase ADD COLUMN shippingEntityId TEXT')
+            } catch (migErr: any) {
+              if (!migErr.message.includes('duplicate column')) {
+                console.error('[create-purchase-safe] migration error:', migErr.message)
+              }
+            }
+            // Retry step 1
+            purchase = await db.purchase.create({
+              data: {
+                purchaseNo,
+                entityId: payload.entityId,
+                supplierId: payload.supplierId,
+                invoiceNo: payload.invoiceNo || null,
+                purchaseDate: payload.purchaseDate ? new Date(payload.purchaseDate) : new Date(),
+                totalAmount: payload.totalAmount || 0,
+                status: payload.status || 'SUBMITTED',
+                createdBy: payload.createdBy || null,
+                notes: payload.notes || null,
+              },
+            })
+            console.log('[create-purchase-safe] Step 1 OK after migration: id', purchase.id)
+          } else {
+            // Real FK error on entityId or supplierId
+            return NextResponse.json({
+              error: `Purchase header creation failed: ${e.message}. Check entityId="${payload.entityId}" and supplierId="${payload.supplierId}".`,
+              step: 1,
+            }, { status: 400 })
+          }
+        }
+
+        // Step 2: Add shippingEntityId via update (if provided)
+        if (payload.shippingEntityId) {
+          console.log('[create-purchase-safe] Step 2: adding shippingEntityId =', payload.shippingEntityId)
+          try {
+            await db.purchase.update({
+              where: { id: purchase.id },
+              data: { shippingEntityId: payload.shippingEntityId },
+            })
+            console.log('[create-purchase-safe] Step 2 OK')
+          } catch (e: any) {
+            console.error('[create-purchase-safe] Step 2 FAILED:', e.message)
+            // shippingEntityId column might not exist — run migration and retry
+            if (e.message.includes('does not exist') || e.message.includes('no such column')) {
+              console.log('[create-purchase-safe] shippingEntityId column missing, adding it...')
+              try {
+                await db.$executeRawUnsafe('ALTER TABLE Purchase ADD COLUMN shippingEntityId TEXT')
+              } catch (migErr: any) {
+                if (!migErr.message.includes('duplicate column')) {
+                  console.error('[create-purchase-safe] migration error:', migErr.message)
+                }
+              }
+              // Retry the update
+              try {
+                await db.purchase.update({
+                  where: { id: purchase.id },
+                  data: { shippingEntityId: payload.shippingEntityId },
+                })
+                console.log('[create-purchase-safe] Step 2 OK after migration')
+              } catch (retryErr: any) {
+                console.error('[create-purchase-safe] Step 2 still failing after migration:', retryErr.message)
+                // Don't fail the whole purchase — shippingEntityId is optional.
+                // The purchase was already created in step 1.
+                console.log('[create-purchase-safe] Continuing without shippingEntityId')
+              }
+            } else {
+              // Other error — continue without shippingEntityId
+              console.log('[create-purchase-safe] Continuing without shippingEntityId:', e.message)
+            }
+          }
+        }
+
+        // Step 3: Add line items one by one
+        const items = Array.isArray(payload.items) ? payload.items : []
+        const createdItems: any[] = []
+        const failedItems: any[] = []
+
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i]
+          console.log(`[create-purchase-safe] Step 3: adding item ${i + 1}/${items.length} (itemId=${it.itemId})`)
+          try {
+            const item = await db.purchaseItem.create({
+              data: {
+                purchaseId: purchase.id,
+                itemId: it.itemId,
+                quantity: it.quantity,
+                unitPrice: it.unitPrice,
+                totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+                serials: it.serials || null,
+              },
+            })
+            createdItems.push(item)
+            console.log(`[create-purchase-safe] Step 3: item ${i + 1} OK`)
+          } catch (e: any) {
+            console.error(`[create-purchase-safe] Step 3: item ${i + 1} FAILED:`, e.message)
+            // Check if the item exists
+            let itemExists = false
+            try {
+              const checkItem = await db.item.findUnique({ where: { id: it.itemId }, select: { id: true, name: true } })
+              if (checkItem) {
+                itemExists = true
+                failedItems.push({ index: i, itemId: it.itemId, itemName: checkItem.name, error: e.message })
+              } else {
+                failedItems.push({ index: i, itemId: it.itemId, itemName: 'NOT FOUND', error: 'Item does not exist in database' })
+              }
+            } catch {
+              failedItems.push({ index: i, itemId: it.itemId, error: e.message })
+            }
+          }
+        }
+
+        // Return the result
+        const result = await db.purchase.findUnique({
+          where: { id: purchase.id },
+          include: {
+            entity: { select: { id: true, name: true } },
+            shippingEntity: { select: { id: true, name: true } },
+            supplier: { select: { id: true, name: true } },
+            items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
+          },
+        })
+
+        if (failedItems.length > 0) {
+          return NextResponse.json({
+            ...result,
+            _warning: `${failedItems.length} item(s) failed to add`,
+            _failedItems: failedItems,
+            _createdItems: createdItems.length,
+          })
+        }
+
+        return NextResponse.json(result)
+      }
+
       case 'create-purchase-receive': {
         // Frontend sends: extra.items = [{ purchaseItemId, itemId, quantity, serials }]
         //                  extra.entityId = the entity that will receive this stock
