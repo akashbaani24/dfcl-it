@@ -188,43 +188,89 @@ export async function GET(req: NextRequest) {
             }
           }
 
-          // Step 4: Build the detail rows
+          // Step 4: Build the detail rows — ONE ROW PER UNIT (barcode/serial)
+          // If a purchase item has 10 units received with 10 barcodes,
+          // we create 10 rows (each with its own barcode + serial).
+          // If not received yet, we create 1 row with qty=ordered and
+          // barcode/serial = '— (not received)'.
           const detailRows: any[] = []
           let sl = 1
           for (const p of purchases) {
             for (const it of p.items) {
               const item = it.item
               const recvData = receiveMap[it.id] || { receiveNos: [], barcodes: [], serials: [] }
-
-              // Format the barcode and serial columns:
-              //   - If received: show comma-separated barcodes / serials
-              //   - If not received: show '— (not received)'
               const hasReceived = recvData.receiveNos.length > 0
-              const barcodeCol = hasReceived
-                ? (recvData.barcodes.length > 0 ? recvData.barcodes.join(', ') : '—')
-                : '— (not received)'
-              const serialCol = hasReceived
-                ? (recvData.serials.length > 0 ? recvData.serials.join(', ') : '—')
-                : '— (not received)'
 
-              detailRows.push({
-                sl: sl++,
-                purchaseNo: p.purchaseNo,
-                purchaseDate: p.purchaseDate,
-                purchaseId: p.purchaseNo,           // Purchase ID = purchase number
-                receiveNo: hasReceived ? recvData.receiveNos.join(', ') : '— (not received)',
-                purchaseFor: p.entity?.name || '—',
-                supplier: p.supplier?.name || '—',
-                itemName: item?.name || '—',
-                modelNo: item?.itemCode || '—',
-                size: item?.description || '—',
-                barcode: barcodeCol,
-                serialNumber: serialCol,
-                qty: it.quantity,
-                uom: item?.uom?.shortCode || '—',
-                unitPrice: it.unitPrice,
-                total: it.totalPrice,
-              })
+              if (hasReceived && recvData.barcodes.length > 0) {
+                // Received with barcodes — create 1 row per barcode
+                const numUnits = recvData.barcodes.length
+                const unitPrice = it.unitPrice
+                const unitTotal = it.unitPrice  // each unit's total = unit price
+                for (let i = 0; i < numUnits; i++) {
+                  detailRows.push({
+                    sl: sl++,
+                    purchaseNo: p.purchaseNo,
+                    purchaseDate: p.purchaseDate,
+                    purchaseId: p.purchaseNo,
+                    receiveNo: recvData.receiveNos.join(', '),
+                    purchaseFor: p.entity?.name || '—',
+                    supplier: p.supplier?.name || '—',
+                    itemName: item?.name || '—',
+                    modelNo: item?.itemCode || '—',
+                    size: item?.description || '—',
+                    barcode: recvData.barcodes[i] || '—',
+                    serialNumber: recvData.serials[i] || '—',
+                    qty: 1,                          // 1 per row (per unit)
+                    uom: item?.uom?.shortCode || '—',
+                    unitPrice: unitPrice,
+                    total: unitTotal,
+                  })
+                }
+              } else if (hasReceived && recvData.serials.length > 0) {
+                // Received with serials but no barcodes — 1 row per serial
+                const numUnits = recvData.serials.length
+                const unitPrice = it.unitPrice
+                for (let i = 0; i < numUnits; i++) {
+                  detailRows.push({
+                    sl: sl++,
+                    purchaseNo: p.purchaseNo,
+                    purchaseDate: p.purchaseDate,
+                    purchaseId: p.purchaseNo,
+                    receiveNo: recvData.receiveNos.join(', '),
+                    purchaseFor: p.entity?.name || '—',
+                    supplier: p.supplier?.name || '—',
+                    itemName: item?.name || '—',
+                    modelNo: item?.itemCode || '—',
+                    size: item?.description || '—',
+                    barcode: '—',
+                    serialNumber: recvData.serials[i] || '—',
+                    qty: 1,
+                    uom: item?.uom?.shortCode || '—',
+                    unitPrice: unitPrice,
+                    total: unitPrice,
+                  })
+                }
+              } else {
+                // Not received yet — 1 row with full qty
+                detailRows.push({
+                  sl: sl++,
+                  purchaseNo: p.purchaseNo,
+                  purchaseDate: p.purchaseDate,
+                  purchaseId: p.purchaseNo,
+                  receiveNo: '— (not received)',
+                  purchaseFor: p.entity?.name || '—',
+                  supplier: p.supplier?.name || '—',
+                  itemName: item?.name || '—',
+                  modelNo: item?.itemCode || '—',
+                  size: item?.description || '—',
+                  barcode: '— (not received)',
+                  serialNumber: '— (not received)',
+                  qty: it.quantity,
+                  uom: item?.uom?.shortCode || '—',
+                  unitPrice: it.unitPrice,
+                  total: it.totalPrice,
+                })
+              }
             }
           }
           return NextResponse.json({
