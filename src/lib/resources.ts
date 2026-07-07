@@ -152,9 +152,18 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   'internal-receives': {
     model: 'internalReceive',
     include: {
-      transfer: { select: { id: true, transferNo: true } },
+      // Include the full transfer with both fromEntity and toEntity so the
+      // Internal Receive page can show "From Entity" in the summary table.
+      transfer: {
+        select: {
+          id: true,
+          transferNo: true,
+          fromEntity: { select: { id: true, name: true } },
+          toEntity: { select: { id: true, name: true } },
+        },
+      },
       entity: { select: { id: true, name: true } },
-      items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
+      items: { include: { item: { select: { id: true, name: true, itemCode: true, uom: { select: { shortCode: true } } } } } },
     },
     listSelect: { id: true, receiveNo: true, transferId: true, entityId: true, receiveDate: true, status: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
