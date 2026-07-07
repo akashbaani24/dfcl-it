@@ -9,7 +9,7 @@ import { list } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function EntitySelectionPage() {
-  const { setActive, setCurrentEntity } = useApp()
+  const { setActive, setCurrentEntity, setSelectedEntity } = useApp()
   const { user, logout } = useAuth()
   const [entities, setEntities] = useState<any[]>([])
   const [q, setQ] = useState('')
@@ -54,6 +54,7 @@ export function EntitySelectionPage() {
 
   const selectEntity = (entity: any) => {
     setCurrentEntity(entity.id)
+    setSelectedEntity(entity.id, entity.name)
     sessionStorage.setItem('selectedEntityId', entity.id)
     sessionStorage.setItem('selectedEntityName', entity.name)
     sessionStorage.setItem('selectedEntityCode', entity.shortCode)
