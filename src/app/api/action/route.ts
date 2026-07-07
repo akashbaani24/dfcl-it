@@ -278,6 +278,7 @@ export async function POST(req: NextRequest) {
                 unitPrice: it.unitPrice,
                 totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
                 serials: it.serials || null,
+                expiryDate: it.expiryDate ? new Date(it.expiryDate) : null,
               },
             })
             createdItems.push(item)
@@ -307,6 +308,7 @@ export async function POST(req: NextRequest) {
                     unitPrice: it.unitPrice,
                     totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
                     serials: it.serials || null,
+                    expiryDate: it.expiryDate ? new Date(it.expiryDate) : null,
                   },
                 })
                 createdItems.push(item)
@@ -323,6 +325,7 @@ export async function POST(req: NextRequest) {
                       quantity: it.quantity,
                       unitPrice: it.unitPrice,
                       totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+                      expiryDate: it.expiryDate ? new Date(it.expiryDate) : null,
                     },
                   })
                   createdItems.push(item)
