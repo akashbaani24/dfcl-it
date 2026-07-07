@@ -105,10 +105,10 @@ export function PurchasesPage() {
   }
 
   const approve = async (id: string) => {
-    if (!confirm('Approve this purchase? This will generate item serials and update stock.')) return
+    if (!confirm('Approve this purchase? You can then receive stock via Purchase Receive.')) return
     try {
       await action('approve-purchase', id)
-      toast.success('Purchase approved. Stock updated.')
+      toast.success('Purchase approved. Use Purchase Receive to receive stock.')
       load()
       setViewing(null)
     } catch (e: any) { toast.error(e.message) }
@@ -298,7 +298,7 @@ export function PurchasesPage() {
           </div>
           {viewing?.status === 'PENDING' && perm.canUpdate && (
             <DialogFooter>
-              <Button onClick={() => approve(viewing.id)}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve & Receive Stock</Button>
+              <Button onClick={() => approve(viewing.id)}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>
             </DialogFooter>
           )}
         </DialogContent>

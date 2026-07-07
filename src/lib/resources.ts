@@ -105,9 +105,9 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     include: {
       entity: { select: { id: true, name: true } },
       supplier: { select: { id: true, name: true } },
-      items: { select: { id: true, itemId: true, quantity: true, unitPrice: true, totalPrice: true } },
+      items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
     },
-    listSelect: { id: true, purchaseNo: true, entityId: true, supplierId: true, requisitionId: true, purchaseDate: true, invoiceNo: true, totalAmount: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdAt: true },
+    listSelect: { id: true, purchaseNo: true, entityId: true, supplierId: true, requisitionId: true, purchaseDate: true, invoiceNo: true, totalAmount: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdBy: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'purchaseNo', autoNumberPrefix: 'PO',
   },
