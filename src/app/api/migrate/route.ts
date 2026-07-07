@@ -35,13 +35,14 @@ const MIGRATIONS: Migration[] = [
   {
     table: 'Purchase',
     column: 'shippingEntityId',
-    // Add the column WITHOUT a REFERENCES constraint first. SQLite doesn't
-    // support adding FK constraints via ALTER TABLE ADD COLUMN reliably
-    // across all versions, so we add it as plain TEXT. Prisma's generated
-    // client will still send the value, and SQLite will store it. The FK
-    // enforcement happens at the Prisma level (pre-flight validation).
     sql: 'ALTER TABLE Purchase ADD COLUMN shippingEntityId TEXT',
     reason: 'Stores which entity will receive the stock when a PurchaseReceive is approved. Falls back to entityId for legacy rows.',
+  },
+  {
+    table: 'PurchaseItem',
+    column: 'serials',
+    sql: 'ALTER TABLE PurchaseItem ADD COLUMN serials TEXT',
+    reason: 'Comma-separated serial numbers entered for this purchase line item.',
   },
   // Add future migrations here as needed.
 ]

@@ -215,6 +215,28 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < items.length; i++) {
           const it = items[i]
           console.log(`[create-purchase-safe] Step 3: adding item ${i + 1}/${items.length} (itemId=${it.itemId})`)
+          // First, verify the item exists (so we can give a clear error if not)
+          let itemRecord: any = null
+          try {
+            itemRecord = await db.item.findUnique({ where: { id: it.itemId }, select: { id: true, name: true, itemCode: true } })
+          } catch (checkErr: any) {
+            console.error(`[create-purchase-safe] Step 3: item ${i + 1} existence check failed:`, checkErr.message)
+          }
+
+          if (!itemRecord) {
+            console.error(`[create-purchase-safe] Step 3: item ${i + 1} NOT FOUND in DB: itemId=${it.itemId}`)
+            failedItems.push({
+              index: i,
+              itemId: it.itemId,
+              itemName: 'NOT FOUND',
+              error: `Item with id "${it.itemId}" does not exist in the database. Please refresh the page and reselect this item.`,
+            })
+            continue
+          }
+
+          // Try to create the PurchaseItem — first with all fields, then
+          // without `serials` as a fallback (in case the column is missing).
+          let itemCreated = false
           try {
             const item = await db.purchaseItem.create({
               data: {
@@ -227,21 +249,73 @@ export async function POST(req: NextRequest) {
               },
             })
             createdItems.push(item)
-            console.log(`[create-purchase-safe] Step 3: item ${i + 1} OK`)
+            itemCreated = true
+            console.log(`[create-purchase-safe] Step 3: item ${i + 1} OK (${itemRecord.name})`)
           } catch (e: any) {
-            console.error(`[create-purchase-safe] Step 3: item ${i + 1} FAILED:`, e.message)
-            // Check if the item exists
-            let itemExists = false
-            try {
-              const checkItem = await db.item.findUnique({ where: { id: it.itemId }, select: { id: true, name: true } })
-              if (checkItem) {
-                itemExists = true
-                failedItems.push({ index: i, itemId: it.itemId, itemName: checkItem.name, error: e.message })
-              } else {
-                failedItems.push({ index: i, itemId: it.itemId, itemName: 'NOT FOUND', error: 'Item does not exist in database' })
+            console.error(`[create-purchase-safe] Step 3: item ${i + 1} FAILED (with serials):`, e.message)
+            // If the error mentions "serials" column, retry without it
+            if (e.message.includes('serials') || e.message.includes('does not exist') || e.message.includes('no such column')) {
+              console.log(`[create-purchase-safe] Step 3: retrying item ${i + 1} without serials field...`)
+              try {
+                // Run migration to add the serials column
+                try {
+                  await db.$executeRawUnsafe('ALTER TABLE PurchaseItem ADD COLUMN serials TEXT')
+                  console.log('[create-purchase-safe] PurchaseItem.serials column added via migration')
+                } catch (migErr: any) {
+                  if (!migErr.message.includes('duplicate column')) {
+                    console.error('[create-purchase-safe] migration error:', migErr.message)
+                  }
+                }
+                // Retry the create with serials
+                const item = await db.purchaseItem.create({
+                  data: {
+                    purchaseId: purchase.id,
+                    itemId: it.itemId,
+                    quantity: it.quantity,
+                    unitPrice: it.unitPrice,
+                    totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+                    serials: it.serials || null,
+                  },
+                })
+                createdItems.push(item)
+                itemCreated = true
+                console.log(`[create-purchase-safe] Step 3: item ${i + 1} OK after migration (${itemRecord.name})`)
+              } catch (retryErr: any) {
+                console.error(`[create-purchase-safe] Step 3: item ${i + 1} STILL FAILED after migration:`, retryErr.message)
+                // Last resort: try without serials at all
+                try {
+                  const item = await db.purchaseItem.create({
+                    data: {
+                      purchaseId: purchase.id,
+                      itemId: it.itemId,
+                      quantity: it.quantity,
+                      unitPrice: it.unitPrice,
+                      totalPrice: it.totalPrice || (it.quantity * it.unitPrice),
+                    },
+                  })
+                  createdItems.push(item)
+                  itemCreated = true
+                  console.log(`[create-purchase-safe] Step 3: item ${i + 1} OK without serials (${itemRecord.name})`)
+                } catch (lastErr: any) {
+                  console.error(`[create-purchase-safe] Step 3: item ${i + 1} FINAL FAILURE:`, lastErr.message)
+                  failedItems.push({
+                    index: i,
+                    itemId: it.itemId,
+                    itemName: itemRecord.name,
+                    itemCode: itemRecord.itemCode,
+                    error: lastErr.message,
+                  })
+                }
               }
-            } catch {
-              failedItems.push({ index: i, itemId: it.itemId, error: e.message })
+            } else {
+              // Different error (FK, etc.)
+              failedItems.push({
+                index: i,
+                itemId: it.itemId,
+                itemName: itemRecord.name,
+                itemCode: itemRecord.itemCode,
+                error: e.message,
+              })
             }
           }
         }

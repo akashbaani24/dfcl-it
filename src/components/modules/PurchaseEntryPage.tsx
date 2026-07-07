@@ -200,16 +200,25 @@ export function PurchaseEntryPage() {
         // creates on Turso/libSQL.
         try {
           const result = await action('create-purchase-safe', 'new', payload)
-          if (result._warning) {
-            toast.warning(`${result._warning}. Purchase created but some items failed.`)
-            console.error('Failed items:', result._failedItems)
+          if (result._warning && result._failedItems?.length > 0) {
+            // Some items failed — show which ones
+            const failedNames = result._failedItems.map((f: any) =>
+              `${f.itemName || f.itemId}${f.itemCode ? ` (${f.itemCode})` : ''}`
+            ).join(', ')
+            toast.error(
+              `Purchase created but ${result._failedItems.length} item(s) failed: ${failedNames}. ` +
+              `পেজ রিফ্রেশ করে আইটেম আবার নির্বাচন করুন। (Refresh and reselect failed items.)`,
+              { duration: 10000 }
+            )
+            console.error('Failed items detail:', result._failedItems)
+          } else if (result._warning) {
+            toast.warning(result._warning)
           } else {
-            toast.success('Purchase created')
+            toast.success('Purchase created successfully')
           }
         } catch (safeErr: any) {
-          // If the safe method also fails, fall back to the normal create
-          // (which might give a better error message now)
-          console.error('Safe purchase creation failed, trying normal create:', safeErr.message)
+          // If the safe method also fails, show the error
+          console.error('Safe purchase creation failed:', safeErr.message)
           let safeMsg = safeErr.message
           try { const p = JSON.parse(safeMsg); if (p.error) safeMsg = p.error } catch {}
           throw new Error(safeMsg)
