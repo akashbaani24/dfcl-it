@@ -6,9 +6,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { list, action } from '@/lib/api'
+import { list, action, getOne } from '@/lib/api'
 import { toast } from 'sonner'
-import { Eye, CheckCircle2 } from 'lucide-react'
+import { Eye, CheckCircle2, Printer, X } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 
@@ -20,6 +20,7 @@ export function InternalTransfersPage() {
   const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<any>(null)
+  const [challan, setChallan] = useState<any>(null)  // challan transfer (full detail)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -29,6 +30,16 @@ export function InternalTransfersPage() {
 
   useEffect(() => {
     load()
+    // After creating a transfer, the entry page stores its id in
+    // sessionStorage so we can auto-open the challan here.
+    const challanId = sessionStorage.getItem('showChallanForTransfer')
+    if (challanId) {
+      sessionStorage.removeItem('showChallanForTransfer')
+      // Fetch full transfer and open challan
+      getOne('internal-transfers', challanId).then((r: any) => {
+        setChallan(r)
+      }).catch(() => {})
+    }
   }, [load])
 
   useEffect(() => {
@@ -39,6 +50,16 @@ export function InternalTransfersPage() {
 
   const startNew = () => {
     setActive('internal-transfer-entry')
+  }
+
+  // Open challan for a transfer (fetches full detail with items + item relation)
+  const openChallan = async (row: any) => {
+    try {
+      const full = await getOne('internal-transfers', row.id) as any
+      setChallan(full)
+    } catch {
+      setChallan(row)  // fallback to list row
+    }
   }
 
   const receive = async (id: string) => {
@@ -178,13 +199,200 @@ export function InternalTransfersPage() {
               </TableBody>
             </Table>
           </div>
-          {viewing?.status === 'PENDING' && perm.canUpdate && (
-            <DialogFooter>
-              <Button onClick={() => receive(viewing.id)}><CheckCircle2 className="h-4 w-4 mr-1" /> Mark Received</Button>
-            </DialogFooter>
-          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => openChallan(viewing)} className="gap-1">
+              <Printer className="h-4 w-4" /> Print Challan
+            </Button>
+            {viewing?.status === 'PENDING' && perm.canUpdate && (
+              <Button onClick={() => receive(viewing.id)} className="gap-1">
+                <CheckCircle2 className="h-4 w-4" /> Mark Received
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Printable Challan — full-screen overlay */}
+      {challan && (
+        <TransferChallan transfer={challan} onClose={() => setChallan(null)} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Printable Transfer Challan — shows as a full-screen overlay with a
+ * print-friendly layout. Includes:
+ *   - Header: company name (from From Entity), challan title, transfer no, date
+ *   - From / To entities
+ *   - Table: Sl, Item Name, Item Code, Barcode, Serial Number, Qty, UoM
+ *   - Footer: signature lines for sender and receiver
+ *
+ * The serials field stores units as "barcode|serial" comma-separated.
+ * We parse this to display barcode and serial in separate columns.
+ */
+function TransferChallan({ transfer, onClose }: { transfer: any; onClose: () => void }) {
+  // Parse the serials field for each item into an array of { barcode, serial }
+  const parseUnits = (serials: string | null | undefined): Array<{ barcode: string; serial: string }> => {
+    if (!serials) return []
+    return serials.split(',').map((unit: string) => {
+      const parts = unit.split('|')
+      return {
+        barcode: parts[0] || '',
+        serial: parts[1] || '',
+      }
+    })
+  }
+
+  // Build a flat list of all units across all items for the challan table.
+  // Each row = one unit (so barcodes/serials are listed individually).
+  const allRows: Array<{
+    sl: number
+    itemName: string
+    itemCode: string
+    barcode: string
+    serial: string
+    qty: number
+    uom: string
+  }> = []
+  let sl = 1
+  for (const it of (transfer.items || [])) {
+    const units = parseUnits(it.serials)
+    const uom = it.item?.uom?.shortCode || ''
+    const itemName = it.item?.name || '—'
+    const itemCode = it.item?.itemCode || ''
+    if (units.length > 0) {
+      // One row per unit (each with its own barcode + serial)
+      for (const u of units) {
+        allRows.push({
+          sl: sl++,
+          itemName,
+          itemCode,
+          barcode: u.barcode,
+          serial: u.serial,
+          qty: 1,
+          uom,
+        })
+      }
+    } else {
+      // No barcodes/serials — one row with the total qty
+      allRows.push({
+        sl: sl++,
+        itemName,
+        itemCode,
+        barcode: '—',
+        serial: '—',
+        qty: it.quantity,
+        uom,
+      })
+    }
+  }
+
+  const totalQty = allRows.reduce((s, r) => s + r.qty, 0)
+  const transferDate = transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white overflow-y-auto print:relative print:overflow-visible">
+      {/* Toolbar — hidden when printing */}
+      <div className="sticky top-0 bg-white border-b px-4 py-2 flex items-center justify-between print:hidden">
+        <h2 className="text-sm font-semibold">Transfer Challan — {transfer.transferNo}</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1">
+            <Printer className="h-4 w-4" /> Print
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Challan content — print-friendly */}
+      <div className="p-8 max-w-[800px] mx-auto print:p-0 print:max-w-none">
+        {/* Header */}
+        <div className="text-center border-b-2 border-black pb-3 mb-4">
+          <h1 className="text-2xl font-bold">{transfer.fromEntity?.name || '—'}</h1>
+          <h2 className="text-lg font-semibold mt-1">Stock Transfer Challan</h2>
+          <div className="flex justify-between text-sm mt-2">
+            <span><b>Challan No:</b> {transfer.transferNo}</span>
+            <span><b>Date:</b> {transferDate}</span>
+          </div>
+        </div>
+
+        {/* From / To */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">From (Source Entity)</div>
+            <div className="text-base font-medium mt-1">{transfer.fromEntity?.name}</div>
+          </div>
+          <div className="border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">To (Destination Entity)</div>
+            <div className="text-base font-medium mt-1">{transfer.toEntity?.name}</div>
+          </div>
+        </div>
+
+        {/* Items table */}
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="border border-black px-2 py-1.5 text-left w-10">Sl</th>
+              <th className="border border-black px-2 py-1.5 text-left">Item Name</th>
+              <th className="border border-black px-2 py-1.5 text-left w-24">Item Code</th>
+              <th className="border border-black px-2 py-1.5 text-left w-36">Barcode</th>
+              <th className="border border-black px-2 py-1.5 text-left w-32">Serial No</th>
+              <th className="border border-black px-2 py-1.5 text-center w-12">Qty</th>
+              <th className="border border-black px-2 py-1.5 text-center w-12">UoM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRows.map((r, i) => (
+              <tr key={i} className="hover:bg-slate-50">
+                <td className="border border-black px-2 py-1 text-center text-xs">{r.sl}</td>
+                <td className="border border-black px-2 py-1 font-medium">{r.itemName}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.itemCode}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.barcode}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.serial}</td>
+                <td className="border border-black px-2 py-1 text-center font-medium">{r.qty}</td>
+                <td className="border border-black px-2 py-1 text-center text-xs">{r.uom}</td>
+              </tr>
+            ))}
+            {/* Total row */}
+            <tr className="bg-slate-100 font-bold">
+              <td colSpan={5} className="border border-black px-2 py-1.5 text-right">Total Quantity:</td>
+              <td className="border border-black px-2 py-1.5 text-center">{totalQty}</td>
+              <td className="border border-black px-2 py-1.5"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Notes */}
+        {transfer.notes && (
+          <div className="mt-4 border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">Notes</div>
+            <div className="text-sm mt-1">{transfer.notes}</div>
+          </div>
+        )}
+
+        {/* Signatures */}
+        <div className="grid grid-cols-2 gap-4 mt-12">
+          <div className="text-center">
+            <div className="border-t border-black pt-1 mx-8">
+              <div className="text-xs font-medium">Sender Signature</div>
+              <div className="text-[10px] text-muted-foreground">(From: {transfer.fromEntity?.name})</div>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="border-t border-black pt-1 mx-8">
+              <div className="text-xs font-medium">Receiver Signature</div>
+              <div className="text-[10px] text-muted-foreground">(To: {transfer.toEntity?.name})</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center text-[10px] text-muted-foreground mt-6 border-t pt-2">
+          This is a system-generated challan from DFCL-IT Inventory System · Generated on {new Date().toLocaleString()}
+        </div>
+      </div>
     </div>
   )
 }

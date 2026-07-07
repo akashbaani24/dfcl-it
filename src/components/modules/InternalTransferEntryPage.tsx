@@ -30,6 +30,7 @@ type TransferLine = {
   quantity: number
   stockBalance: number   // available stock at From Entity
   barcodes: string[]     // scanned/entered barcodes for this line
+  serialNumbers: string[]  // serial numbers from product body (one per scanned unit)
   maxQty: number         // = stockBalance
 }
 
@@ -109,13 +110,19 @@ export function InternalTransferEntryPage() {
       const item = data.item
       const stockBalance = data.stockBalance || 0
       const serial = data.serial
+      // The scanned value might be a barcode OR a serial number — store both
+      // so the challan can display them in separate columns.
+      const scannedValue = barcode.trim()
+      const isSerialNumber = serial.serialNumber === scannedValue
+      const scannedBarcode = isSerialNumber ? (serial.barcode || scannedValue) : scannedValue
+      const scannedSerial = isSerialNumber ? scannedValue : (serial.serialNumber || '')
 
       // Check if this item is already in the lines
       const existing = lines.find((l) => l.itemId === item.id)
       if (existing) {
         // Add the barcode to the existing line (if not already there)
-        if (existing.barcodes.includes(barcode.trim())) {
-          toast.warning(`Barcode "${barcode}" already added for ${item.name}`)
+        if (existing.barcodes.includes(scannedBarcode) || (scannedSerial && existing.serialNumbers.includes(scannedSerial))) {
+          toast.warning(`"${scannedValue}" already added for ${item.name}`)
         } else {
           const newQty = existing.quantity + 1
           if (newQty > existing.maxQty) {
@@ -126,7 +133,14 @@ export function InternalTransferEntryPage() {
           } else {
             setLines(lines.map((l) =>
               l.itemId === item.id
-                ? { ...l, quantity: newQty, barcodes: [...l.barcodes, barcode.trim()] }
+                ? {
+                    ...l,
+                    quantity: newQty,
+                    barcodes: [...l.barcodes, scannedBarcode],
+                    serialNumbers: scannedSerial
+                      ? [...l.serialNumbers, scannedSerial]
+                      : l.serialNumbers,
+                  }
                 : l
             ))
             toast.success(`Added ${item.name} (qty: ${newQty})`)
@@ -150,7 +164,8 @@ export function InternalTransferEntryPage() {
             quantity: 1,
             stockBalance: stockBalance,
             maxQty: stockBalance,
-            barcodes: [barcode.trim()],
+            barcodes: [scannedBarcode],
+            serialNumbers: scannedSerial ? [scannedSerial] : [],
           }
           setLines([...lines, newLine])
           toast.success(`Added ${item.name} (stock: ${stockBalance})`)
@@ -226,6 +241,7 @@ export function InternalTransferEntryPage() {
         stockBalance: stockBalance,
         maxQty: stockBalance,
         barcodes: [],
+        serialNumbers: [],
       }
       setLines([...lines, newLine])
     } catch (e: any) {
@@ -263,6 +279,32 @@ export function InternalTransferEntryPage() {
     setConfirmOpen(false)
 
     try {
+      // Build a combined serials string per line that preserves BOTH the
+      // barcode and the serial number for each unit. Format per unit:
+      //   "barcode|serial"  (e.g. "2607070123456|SN001")
+      // Multiple units are comma-separated:
+      //   "2607070123456|SN001,2607070123457|SN002"
+      // If no serial exists for a unit, only the barcode is stored:
+      //   "2607070123456,2607070123457"
+      // If no barcode but serial exists:
+      //   "|SN001,|SN002"
+      // The challan/view page parses this format to show barcode and serial
+      // in separate columns.
+      const buildSerialsField = (line: TransferLine): string | null => {
+        if (line.barcodes.length === 0 && line.serialNumbers.length === 0) return null
+        const units: string[] = []
+        const maxLen = Math.max(line.barcodes.length, line.serialNumbers.length)
+        for (let i = 0; i < maxLen; i++) {
+          const bc = line.barcodes[i] || ''
+          const sn = line.serialNumbers[i] || ''
+          // Only add if at least one of them has a value
+          if (bc || sn) {
+            units.push(`${bc}|${sn}`)
+          }
+        }
+        return units.length > 0 ? units.join(',') : null
+      }
+
       const payload = {
         fromEntityId,
         toEntityId,
@@ -270,19 +312,20 @@ export function InternalTransferEntryPage() {
         notes: notes || undefined,
         status: 'PENDING',
         // Prisma expects nested create: items: { create: [...] }
-        // NOT items: [...] directly (that fails with "Invalid value provided.
-        // Expected ...UncheckedCreateNestedManyWithoutTransferInput")
         items: {
           create: lines.map((l) => ({
             itemId: l.itemId,
             quantity: l.quantity,
-            serials: l.barcodes.length > 0 ? l.barcodes.join(',') : null,
+            serials: buildSerialsField(l),
           })),
         },
       }
 
       const r = await create('internal-transfers', payload)
       toast.success(`Transfer ${r.transferNo} created`)
+      // Store the created transfer id so InternalTransfersPage can auto-open
+      // the challan view after navigation.
+      sessionStorage.setItem('showChallanForTransfer', r.id)
       setActive('internal-transfers')
     } catch (e: any) {
       let msg = e.message
@@ -376,7 +419,7 @@ export function InternalTransferEntryPage() {
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               onKeyDown={onBarcodeKeyDown}
-              placeholder="Scan or type barcode, then press Enter..."
+              placeholder="Scan or type barcode / serial number, then press Enter..."
               className="pl-8 h-10 font-mono"
               disabled={scanning || !fromEntityId}
             />
@@ -414,7 +457,8 @@ export function InternalTransferEntryPage() {
                   <th className="px-3 py-2 text-left font-semibold text-xs">Item Name</th>
                   <th className="px-3 py-2 text-left font-semibold text-xs w-24">In Stock</th>
                   <th className="px-3 py-2 text-left font-semibold text-xs w-24">Transfer Qty</th>
-                  <th className="px-3 py-2 text-left font-semibold text-xs min-w-[200px]">Barcodes (scanned)</th>
+                  <th className="px-3 py-2 text-left font-semibold text-xs min-w-[160px]">Barcodes</th>
+                  <th className="px-3 py-2 text-left font-semibold text-xs min-w-[160px]">Serial Numbers</th>
                   <th className="px-3 py-2 w-10"></th>
                 </tr>
               </thead>
@@ -463,7 +507,20 @@ export function InternalTransferEntryPage() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">— (manual add)</span>
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {l.serialNumbers.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {l.serialNumbers.map((sn, i) => (
+                            <span key={i} className="text-[10px] font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                              {sn}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
