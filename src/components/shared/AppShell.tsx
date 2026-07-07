@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/shared/Sidebar'
 import { NewsTicker } from '@/components/shared/NewsTicker'
 import { LoginPage } from '@/components/shared/LoginPage'
 import { Button } from '@/components/ui/button'
-import { Menu, X, LogOut, User as UserIcon, Loader2, Building2 } from 'lucide-react'
+import { Menu, X, LogOut, User as UserIcon, Loader2, Building2, Bell, MessageCircle, X as XIcon, Send } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -56,6 +56,11 @@ export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity } = useApp()
   const { user, loading, setAuth, setLoading, logout } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<{role: string, text: string}[]>([])
+  const [chatInput, setChatInput] = useState('')
 
   // Fetch current user on mount
   useEffect(() => {
@@ -103,6 +108,52 @@ export function AppShell() {
     }
   }, [])
 
+  // Fetch notifications (pending approvals, low stock, etc.)
+  useEffect(() => {
+    if (!user || !selectedEntityId) return
+    const fetchNotifs = async () => {
+      try {
+        const [purchases, sales, reqs] = await Promise.all([
+          fetch('/api/resource?slug=purchases&status=SUBMITTED').then(r => r.json()).catch(() => []),
+          fetch('/api/resource?slug=sales&status=PENDING').then(r => r.json()).catch(() => []),
+          fetch('/api/resource?slug=purchase-requisitions&status=PENDING').then(r => r.json()).catch(() => []),
+        ])
+        const notifs: any[] = []
+        if (Array.isArray(purchases)) {
+          purchases.forEach((p: any) => {
+            notifs.push({ type: 'purchase', text: `Purchase ${p.purchaseNo} awaiting approval`, id: p.id, module: 'purchase-approvals' })
+          })
+        }
+        if (Array.isArray(sales)) {
+          sales.forEach((s: any) => {
+            notifs.push({ type: 'sales', text: `Sales ${s.salesNo} pending delivery`, id: s.id, module: 'sales-delivery' })
+          })
+        }
+        if (Array.isArray(reqs)) {
+          reqs.forEach((r: any) => {
+            notifs.push({ type: 'req', text: `Requisition ${r.reqNo} awaiting approval`, id: r.id, module: 'purchase-requisitions' })
+          })
+        }
+        setNotifications(notifs)
+      } catch {}
+    }
+    fetchNotifs()
+    const interval = setInterval(fetchNotifs, 60000) // refresh every 60s
+    return () => clearInterval(interval)
+  }, [user, selectedEntityId])
+
+  // Chat send
+  const sendChat = () => {
+    if (!chatInput.trim()) return
+    const msg = chatInput.trim()
+    setChatMessages(prev => [...prev, { role: 'user', text: msg }])
+    setChatInput('')
+    // Simulated response
+    setTimeout(() => {
+      setChatMessages(prev => [...prev, { role: 'bot', text: 'Thank you for your message. Our support team will get back to you soon. For urgent issues, call 01534955065.' }])
+    }, 1000)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -145,6 +196,39 @@ export function AppShell() {
           </div>
         </div>
         <div className="flex-1" />
+        {/* Notification bell */}
+        <div className="relative">
+          <Button variant="ghost" size="icon" className="h-9 w-9 relative" onClick={() => setNotifOpen(!notifOpen)}>
+            <Bell className="h-4 w-4" />
+            {notifications.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {notifications.length > 9 ? '9+' : notifications.length}
+              </span>
+            )}
+          </Button>
+          {notifOpen && (
+            <div className="absolute right-0 top-full mt-1 w-80 bg-card border rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+              <div className="px-3 py-2 border-b font-semibold text-sm flex items-center justify-between">
+                <span>Notifications</span>
+                <span className="text-xs text-muted-foreground">{notifications.length} new</span>
+              </div>
+              {notifications.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">No new notifications</div>
+              ) : (
+                notifications.map((n, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setActive(n.module as any); setNotifOpen(false) }}
+                    className="w-full text-left px-3 py-2.5 border-b last:border-b-0 hover:bg-accent transition-colors flex items-start gap-2"
+                  >
+                    <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${n.type === 'purchase' ? 'bg-amber-500' : n.type === 'sales' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                    <span className="text-xs">{n.text}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
         {/* Selected entity badge */}
         <button
           onClick={() => setActive('entity-selection')}
@@ -209,6 +293,62 @@ export function AppShell() {
       <footer className="border-t py-3 px-4 text-xs text-muted-foreground text-center">
         DFCL-IT (Test System) © 2026 — Idea & Developed by Abdur Rahman Akash · WhatsApp: 01534955065
       </footer>
+
+      {/* Floating Chat Widget — bottom right */}
+      {chatOpen && (
+        <div className="fixed bottom-20 right-4 w-80 h-96 bg-card rounded-lg shadow-2xl border z-50 flex flex-col">
+          {/* Chat header */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-sm font-semibold">Support Chat</span>
+            </div>
+            <button onClick={() => setChatOpen(false)} className="hover:bg-white/20 rounded p-1">
+              <XIcon className="h-4 w-4" />
+            </button>
+          </div>
+          {/* Chat messages */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-xs text-muted-foreground py-8">
+                <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p>Hi! How can we help you?</p>
+                <p className="mt-1">Type your message below.</p>
+              </div>
+            )}
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] px-3 py-1.5 rounded-lg text-xs ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-muted text-foreground'}`}>
+                  {m.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Chat input */}
+          <div className="p-2 border-t flex gap-1">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') sendChat() }}
+              placeholder="Type a message..."
+              className="flex-1 h-9 px-3 border rounded-lg bg-background text-xs focus:outline-none focus:border-blue-500"
+            />
+            <button onClick={sendChat} className="h-9 w-9 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 shrink-0">
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chat toggle button — floating bottom right */}
+      <button
+        onClick={() => setChatOpen(!chatOpen)}
+        className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center z-50"
+        title="Chat with support"
+      >
+        {chatOpen ? <XIcon className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+      </button>
     </div>
   )
 }
