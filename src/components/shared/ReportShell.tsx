@@ -30,7 +30,7 @@ import { usePerm } from '@/components/shared/Perms'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import { SearchInput } from '@/components/shared/SearchInput'
 import { useAuth } from '@/lib/auth-store'
-import { Calendar, FileText, Loader2, FileSpreadsheet, FileType } from 'lucide-react'
+import { Calendar, FileText, Loader2, FileSpreadsheet, FileType, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export type ReportTypeOption = { value: string; label: string; sublabel?: string }
 export type Col = { key: string; label: string; className?: string; align?: 'left' | 'right' | 'center' }
@@ -124,6 +124,9 @@ export function ReportShell({
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(20)  // 20, 50, 100, or 0 = All
 
   const buildParams = useCallback((): Record<string, string> => {
     const params: Record<string, string> = { type: apiType, reportType, range }
@@ -170,6 +173,13 @@ export function ReportShell({
     const ql = q.toLowerCase()
     return rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql))
   }, [q, rows])
+
+  // Reset to page 1 when filtered data or report type changes
+  useEffect(() => { setPage(1) }, [filtered, reportType, pageSize])
+
+  // Paginate the filtered rows
+  const totalPages = pageSize === 0 ? 1 : Math.ceil(filtered.length / pageSize)
+  const pagedRows = pageSize === 0 ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize)
 
   if (!perm.canView) return <EmptyState title="Access denied" hint="You don't have permission to view this report" />
 
@@ -342,10 +352,28 @@ export function ReportShell({
         </div>
       )}
 
-      {/* Search + Export */}
+      {/* Search + Export + Page Size */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="Search report..." />
         {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {/* Page size selector */}
+        {!loading && filtered.length > 0 && (
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+            className="h-8 text-xs border rounded-md px-2 bg-card"
+          >
+            <option value={20}>20 / page</option>
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+            <option value={0}>All</option>
+          </select>
+        )}
+        {filtered.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">
+            {filtered.length} records{pageSize > 0 && totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {perm.canExcel && (
             <Button
@@ -380,7 +408,7 @@ export function ReportShell({
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
@@ -392,9 +420,9 @@ export function ReportShell({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r: any, i: number) => (
+                  {pagedRows.map((r: any, i: number) => (
                     <TableRow key={i}>
-                      {renderRow(r, reportType, i)}
+                      {renderRow(r, reportType, (page - 1) * pageSize + i)}
                     </TableRow>
                   ))}
                   {renderTotalRow && (
@@ -405,6 +433,33 @@ export function ReportShell({
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination controls */}
+            {pageSize > 0 && totalPages > 1 && (
+              <div className="flex items-center justify-between p-3 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="gap-1"
+                >
+                  Next <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

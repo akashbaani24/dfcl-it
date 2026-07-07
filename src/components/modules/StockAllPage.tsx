@@ -135,6 +135,8 @@ export function StockAllPage() {
   const [data, setData] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [entities, setEntities] = useState<any[]>([])
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [entityId, setEntityId] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
@@ -181,6 +183,11 @@ export function StockAllPage() {
     )
   }, [q, allRows])
 
+  // Pagination
+  useEffect(() => { setPage(1) }, [filtered, pageSize])
+  const totalPages = pageSize === 0 ? 1 : Math.ceil(filtered.length / pageSize)
+  const pagedRows = pageSize === 0 ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize)
+
   const exportRows = filtered.map((r, i) => ({
     sl: i + 1,
     entity: r.entityShortCode,
@@ -214,6 +221,23 @@ export function StockAllPage() {
       {/* Top row: Search (left) + Entity filter & exports (right) */}
       <div className="flex items-end gap-2 mb-3 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="Search item / barcode / serial / entity..." />
+        {!loading && filtered.length > 0 && (
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+            className="h-8 text-xs border rounded-md px-2 bg-card"
+          >
+            <option value={20}>20 / page</option>
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+            <option value={0}>All</option>
+          </select>
+        )}
+        {filtered.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">
+            {filtered.length} records{pageSize > 0 && totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+          </span>
+        )}
         <div className="ml-auto flex items-end gap-2">
           <div>
             <Label className="text-xs">Entity</Label>
@@ -264,7 +288,7 @@ export function StockAllPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r, idx) => {
+                  {pagedRows.map((r, idx) => {
                     const expiryColor = (() => {
                       if (!r.expiryDate) return 'text-muted-foreground'
                       const d = new Date(r.expiryDate)
@@ -307,6 +331,18 @@ export function StockAllPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {pageSize > 0 && totalPages > 1 && (
+              <div className="flex items-center justify-between p-3 border-t">
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="gap-1">
+                  ← Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="gap-1">
+                  Next →
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
