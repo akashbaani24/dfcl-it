@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
     // and produces a clearer "missing required field" error otherwise.
     const payload = sanitizePayload({ ...data })
     if (cfg.autoNumberField && cfg.autoNumberPrefix && !payload[cfg.autoNumberField]) {
-      payload[cfg.autoNumberField] = await generateNumber(cfg.autoNumberPrefix)
+      payload[cfg.autoNumberField] = await generateNumber(cfg.autoNumberPrefix, cfg.docType)
     }
 
     // Pre-flight: validate that all FK references in the payload actually

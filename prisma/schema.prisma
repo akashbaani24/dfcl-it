@@ -666,3 +666,29 @@ model AccountEntry {
   @@index([date])
   @@index([createdAt])
 }
+
+// ============ SEQUENTIAL DOCUMENT NUMBERS ============
+
+// Stores the last-used sequential number for each document type per day.
+// Numbers reset daily (yymmdd changes). Used to generate formatted IDs:
+//   PUR-250707-01-0000001 (Purchase)
+//   PURTN-250707-02-0000001 (Purchase Return)
+//   IT-250707-03-0000001 (Internal Transfer)
+//   IR-250707-04-0000001 (Internal Receive)
+//   ADJ-250707-05-0000001 (Adjustment)
+//   SL-250707-06-0000001 (Sales)
+//   SLRTN-250707-07-0000001 (Sales Return)
+//   SLRF-250707-08-0000001 (Sales Refund)
+//   PRQ-250707-09-0000001 (Purchase Requisition)
+//   PRV-250707-010-0000001 (Purchase Receive)
+model SequentialNumber {
+  id        String   @id @default(cuid())
+  docType   String   // 'PURCHASE', 'PURCHASE_RETURN', 'INTERNAL_TRANSFER', etc.
+  yymmdd    String   // date string like '250707'
+  lastSeq   Int      @default(0)  // last used sequence number
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([docType, yymmdd])
+  @@index([docType])
+}

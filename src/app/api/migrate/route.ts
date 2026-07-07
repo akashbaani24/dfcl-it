@@ -47,14 +47,56 @@ const MIGRATIONS: Migration[] = [
   // Add future migrations here as needed.
 ]
 
+// Tables that need to be created (not just columns added). These run
+// BEFORE the column migrations. Each is idempotent (CREATE TABLE IF NOT EXISTS).
+const TABLE_MIGRATIONS: Array<{ table: string; sql: string; indexes?: string[] }> = [
+  {
+    table: 'SequentialNumber',
+    sql: `CREATE TABLE IF NOT EXISTS SequentialNumber (
+      id TEXT PRIMARY KEY NOT NULL,
+      docType TEXT NOT NULL,
+      yymmdd TEXT NOT NULL,
+      lastSeq INTEGER NOT NULL DEFAULT 0,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    indexes: [
+      'CREATE UNIQUE INDEX IF NOT EXISTS SequentialNumber_docType_yymmdd_idx ON SequentialNumber(docType, yymmdd)',
+      'CREATE INDEX IF NOT EXISTS SequentialNumber_docType_idx ON SequentialNumber(docType)',
+    ],
+  },
+]
+
 export async function GET(req: NextRequest) {
   const auto = req.nextUrl.searchParams.get('auto') === '1'
   const results: Array<{ table: string; column: string; status: 'exists' | 'added' | 'failed'; error?: string }> = []
 
+  // 1. Run table-creation migrations first (CREATE TABLE IF NOT EXISTS)
+  for (const tm of TABLE_MIGRATIONS) {
+    try {
+      await db.$executeRawUnsafe(tm.sql)
+      results.push({ table: tm.table, column: '(table)', status: 'exists' })
+      // Create indexes
+      if (tm.indexes) {
+        for (const idx of tm.indexes) {
+          try { await db.$executeRawUnsafe(idx) } catch {}
+        }
+      }
+    } catch (e: any) {
+      const msg = e.message || ''
+      if (msg.includes('already exists')) {
+        results.push({ table: tm.table, column: '(table)', status: 'exists' })
+      } else {
+        console.error(`[migrate] table creation failed for ${tm.table}:`, msg)
+        results.push({ table: tm.table, column: '(table)', status: 'failed', error: msg })
+      }
+    }
+  }
+
+  // 2. Run column-addition migrations
   for (const migration of MIGRATIONS) {
     try {
       // Check if the column already exists using PRAGMA table_info
-      // This returns rows like: { name: 'id', type: 'TEXT', ... }
       const columns: any[] = await db.$queryRawUnsafe(
         `PRAGMA table_info(${migration.table})`
       )
@@ -70,8 +112,6 @@ export async function GET(req: NextRequest) {
       await db.$executeRawUnsafe(migration.sql)
       results.push({ table: migration.table, column: migration.column, status: 'added' })
     } catch (e: any) {
-      // If the error is "duplicate column name", the column already exists —
-      // treat as success. Otherwise log the real error.
       const msg = e.message || ''
       if (msg.includes('duplicate column name') || msg.includes('already exists')) {
         results.push({ table: migration.table, column: migration.column, status: 'exists' })

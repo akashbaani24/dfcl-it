@@ -9,6 +9,10 @@ export type ResourceConfig = {
   // Fields used to generate auto numbers like PR-0001
   autoNumberField?: string
   autoNumberPrefix?: string
+  // Document type for the new sequential number format (PUR-YYMMDD-01-0000001).
+  // When set, generateNumber() calls /api/doc-number?type=<docType> instead
+  // of using the old prefix-based format.
+  docType?: string
   // Allow create via this route
   writable?: boolean
   // Allow update via this route
@@ -98,7 +102,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, reqNo: true, entityId: true, requestDate: true, requiredDate: true, requestedBy: true, notes: true, status: true, approvedBy: true, approvedAt: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'reqNo', autoNumberPrefix: 'PR',
+    autoNumberField: 'reqNo', autoNumberPrefix: 'PRQ',
+    docType: 'PURCHASE_REQUISITION',  // PRQ-YYMMDD-09-0000001
   },
   'purchases': {
     model: 'purchase',
@@ -110,7 +115,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, purchaseNo: true, entityId: true, shippingEntityId: true, supplierId: true, requisitionId: true, purchaseDate: true, invoiceNo: true, totalAmount: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdBy: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'purchaseNo', autoNumberPrefix: 'PO',
+    autoNumberField: 'purchaseNo', autoNumberPrefix: 'PUR',
+    docType: 'PURCHASE',  // PUR-YYMMDD-01-0000001
   },
   'purchase-returns': {
     model: 'purchaseReturn',
@@ -120,7 +126,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, returnNo: true, purchaseId: true, returnDate: true, reason: true, totalAmount: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'returnNo', autoNumberPrefix: 'PRT',
+    autoNumberField: 'returnNo', autoNumberPrefix: 'PURTN',
+    docType: 'PURCHASE_RETURN',  // PURTN-YYMMDD-02-0000001
   },
   'purchase-receives': {
     model: 'purchaseReceive',
@@ -131,7 +138,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, receiveNo: true, purchaseId: true, entityId: true, receiveDate: true, status: true, approvedBy: true, approvedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'receiveNo', autoNumberPrefix: 'PRC',
+    autoNumberField: 'receiveNo', autoNumberPrefix: 'PRV',
+    docType: 'PURCHASE_RECEIVE',  // PRV-YYMMDD-010-0000001
   },
   // Inventory
   'internal-transfers': {
@@ -148,6 +156,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     listSelect: { id: true, transferNo: true, fromEntityId: true, toEntityId: true, transferDate: true, status: true, receivedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'transferNo', autoNumberPrefix: 'IT',
+    docType: 'INTERNAL_TRANSFER',  // IT-YYMMDD-03-0000001
   },
   'internal-receives': {
     model: 'internalReceive',
@@ -168,6 +177,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     listSelect: { id: true, receiveNo: true, transferId: true, entityId: true, receiveDate: true, status: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'receiveNo', autoNumberPrefix: 'IR',
+    docType: 'INTERNAL_RECEIVE',  // IR-YYMMDD-04-0000001
   },
   'adjustments': {
     model: 'adjustment',
@@ -178,6 +188,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     listSelect: { id: true, adjustNo: true, entityId: true, adjustDate: true, type: true, reason: true, status: true, approvedBy: true, approvedAt: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'adjustNo', autoNumberPrefix: 'ADJ',
+    docType: 'ADJUSTMENT',  // ADJ-YYMMDD-05-0000001
   },
   'stock-transactions': {
     model: 'stockTransaction',
@@ -196,7 +207,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, salesNo: true, entityId: true, customerName: true, customerPhone: true, customerAddress: true, salesDate: true, deliveryDate: true, totalAmount: true, paidAmount: true, status: true, deliveryStatus: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'salesNo', autoNumberPrefix: 'SO',
+    autoNumberField: 'salesNo', autoNumberPrefix: 'SL',
+    docType: 'SALES',  // SL-YYMMDD-06-0000001
   },
   'sales-returns': {
     model: 'salesReturn',
@@ -206,7 +218,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, returnNo: true, salesId: true, returnDate: true, reason: true, totalAmount: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'returnNo', autoNumberPrefix: 'SR',
+    autoNumberField: 'returnNo', autoNumberPrefix: 'SLRTN',
+    docType: 'SALES_RETURN',  // SLRTN-YYMMDD-07-0000001
   },
   'sales-refunds': {
     model: 'salesRefund',
@@ -216,7 +229,8 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     },
     listSelect: { id: true, refundNo: true, salesId: true, returnId: true, refundDate: true, amount: true, method: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
-    autoNumberField: 'refundNo', autoNumberPrefix: 'RF',
+    autoNumberField: 'refundNo', autoNumberPrefix: 'SLRF',
+    docType: 'SALES_REFUND',  // SLRF-YYMMDD-08-0000001
   },
   // Accounts
   'account-entries': {
@@ -228,10 +242,55 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   },
 }
 
-export async function generateNumber(prefix: string): Promise<string> {
+// Generate a document number. If `docType` is provided, uses the new
+// sequential format (PUR-YYMMDD-01-0000001) via the /api/doc-number
+// endpoint. Otherwise falls back to the old prefix-based format.
+//
+// NOTE: This function runs server-side (in the API route). We can't call
+// /api/doc-number via fetch (that would be a loop), so we import the
+// DOC_CONFIG and use the db directly.
+export async function generateNumber(prefix: string, docType?: string): Promise<string> {
+  if (docType) {
+    // New sequential format
+    const { DOC_CONFIG } = await import('@/app/api/doc-number/route')
+    const cfg = DOC_CONFIG[docType]
+    if (!cfg) {
+      throw new Error(`Unknown docType: ${docType}`)
+    }
+
+    const now = new Date()
+    const yy = String(now.getFullYear()).slice(-2)
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    const yymmdd = `${yy}${mm}${dd}`
+
+    // Atomically get the next sequence number
+    const existing = await db.sequentialNumber.findUnique({
+      where: { docType_yymmdd: { docType, yymmdd } },
+    })
+
+    let nextSeq: number
+    if (existing) {
+      nextSeq = existing.lastSeq + 1
+      await db.sequentialNumber.update({
+        where: { id: existing.id },
+        data: { lastSeq: nextSeq },
+      })
+    } else {
+      nextSeq = 1
+      await db.sequentialNumber.create({
+        data: { docType, yymmdd, lastSeq: nextSeq },
+      })
+    }
+
+    const seqPadded = String(nextSeq).padStart(7, '0')
+    return `${cfg.prefix}-${yymmdd}-${cfg.typeCode}-${seqPadded}`
+  }
+
+  // Old format (fallback) — used by AccountEntry which doesn't have a
+  // docType yet
   const today = new Date()
   const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
-  // Use timestamp suffix for uniqueness within same day
   const ts = Date.now().toString().slice(-5)
   return `${prefix}-${ymd}-${ts}`
 }

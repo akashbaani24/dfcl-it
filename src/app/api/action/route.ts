@@ -128,13 +128,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Generate purchaseNo
-        const now = new Date()
-        const yy = String(now.getFullYear()).slice(-2)
-        const mm = String(now.getMonth() + 1).padStart(2, '0')
-        const dd = String(now.getDate()).padStart(2, '0')
-        const ts = Date.now().toString().slice(-6)
-        const purchaseNo = `PO-${yy}${mm}${dd}-${ts}`
+        // Generate purchaseNo using the new sequential format:
+        // PUR-YYMMDD-01-0000001
+        const { generateNumber } = await import('@/lib/resources')
+        const purchaseNo = await generateNumber('PUR', 'PURCHASE')
 
         // Store the idempotency key in the notes field (if provided) so we
         // can detect duplicate submissions. We prefix it with "IDEM:" and
@@ -429,13 +426,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Generate receiveNo: PRC-yymmdd-timestamp
-        const now = new Date()
-        const yy = String(now.getFullYear()).slice(-2)
-        const mm = String(now.getMonth() + 1).padStart(2, '0')
-        const dd = String(now.getDate()).padStart(2, '0')
-        const ts = Date.now().toString().slice(-6)
-        const receiveNo = `PRC-${yy}${mm}${dd}-${ts}`
+        // Generate receiveNo using the new sequential format:
+        // PRV-YYMMDD-010-0000001
+        const { generateNumber: genPurchaseReceiveNo } = await import('@/lib/resources')
+        const receiveNo = await genPurchaseReceiveNo('PRV', 'PURCHASE_RECEIVE')
 
         // Build line items: 1 barcode per batch + optional serials
         const lineItems = itemsPayload
@@ -649,13 +643,10 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        // Generate receiveNo: IR-yymmdd-timestamp
-        const now = new Date()
-        const yy = String(now.getFullYear()).slice(-2)
-        const mm = String(now.getMonth() + 1).padStart(2, '0')
-        const dd = String(now.getDate()).padStart(2, '0')
-        const ts = Date.now().toString().slice(-6)
-        const receiveNo = `IR-${yy}${mm}${dd}-${ts}`
+        // Generate receiveNo using the new sequential format:
+        // IR-YYMMDD-04-0000001
+        const { generateNumber: genInternalReceiveNo } = await import('@/lib/resources')
+        const receiveNo = await genInternalReceiveNo('IR', 'INTERNAL_RECEIVE')
 
         // Create the InternalReceive record
         const receive = await db.internalReceive.create({
