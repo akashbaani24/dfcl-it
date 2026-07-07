@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
 
       case 'create-purchase-receive': {
         // Frontend sends: extra.items = [{ purchaseItemId, itemId, quantity, serials }]
+        //                  extra.entityId = the entity that will receive this stock
+        //                                  (defaults to purchase.shippingEntityId || purchase.entityId)
         // 1 barcode per receive batch (not per unit)
         // Serials: from product body, optional, no qty connection
         const purchase = await db.purchase.findUnique({
@@ -96,6 +98,16 @@ export async function POST(req: NextRequest) {
         const itemsPayload = Array.isArray(extra?.items) ? extra.items : []
         if (itemsPayload.length === 0) {
           return NextResponse.json({ error: 'No items to receive' }, { status: 400 })
+        }
+
+        // Resolve the receiving entity:
+        //   1. extra.entityId  — explicit override from the receive wizard (Step 1)
+        //   2. purchase.shippingEntityId — the "Shipping/Stock Receive" entity
+        //                                   chosen at purchase entry time
+        //   3. purchase.entityId — legacy fallback (the purchasing entity)
+        const receiveEntityId = extra?.entityId || purchase.shippingEntityId || purchase.entityId
+        if (!receiveEntityId) {
+          return NextResponse.json({ error: 'No receiving entity selected' }, { status: 400 })
         }
 
         // Check for duplicate serials (within this receive + against DB)
@@ -146,7 +158,7 @@ export async function POST(req: NextRequest) {
           data: {
             receiveNo,
             purchaseId: purchase.id,
-            entityId: purchase.entityId,
+            entityId: receiveEntityId,
             receiveDate: new Date(),
             status: 'PENDING',
             notes: extra?.notes || null,

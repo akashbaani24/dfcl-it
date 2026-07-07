@@ -72,7 +72,9 @@ export function PurchaseEntryPage() {
       setSupplierId(r.supplierId || '')
       setInvoiceNo(r.invoiceNo || '')
       setEntryBy(r.createdBy || user?.employee?.name || '')
-      setShippingEntity(r.entityId || '')
+      // Shipping/Stock Receive entity — defaults to the purchase entity for
+      // legacy rows that don't have shippingEntityId set yet.
+      setShippingEntity(r.shippingEntityId || r.entityId || '')
       setNotes(r.notes || '')
       setLines((r.items || []).map((it: any) => ({
         id: it.id,
@@ -85,6 +87,16 @@ export function PurchaseEntryPage() {
       })))
     }).catch(() => { toast.error('Failed to load'); setLoading(false) })
   }, [editingId])
+
+  // When creating a new purchase (not editing), auto-default the Shipping/
+  // Stock Receive entity to whatever the user picks as "Purchase For". The
+  // user can still override it afterwards — this just saves a redundant
+  // second pick in the common case where both entities are the same.
+  useEffect(() => {
+    if (editingId) return
+    if (!purchaseFor) return
+    setShippingEntity((prev) => prev || purchaseFor)
+  }, [purchaseFor, editingId])
 
   const addLine = () => {
     setLines([...lines, {
@@ -126,6 +138,7 @@ export function PurchaseEntryPage() {
 
   const save = async () => {
     if (!purchaseFor) { toast.error('Purchase For (Entity) is required'); return }
+    if (!shippingEntity) { toast.error('Shipping/Stock Receive (Entity) is required'); return }
     if (!supplierId) { toast.error('Supplier is required'); return }
     if (lines.length === 0) { toast.error('Add at least one item'); return }
     for (const l of lines) {
@@ -136,6 +149,10 @@ export function PurchaseEntryPage() {
     try {
       const payload = {
         entityId: purchaseFor,
+        // Shipping/Stock Receive entity — this is where the stock will land
+        // when a PurchaseReceive is approved. Defaults to the purchasing
+        // entity if the user left it empty (backward compatibility).
+        shippingEntityId: shippingEntity || purchaseFor,
         supplierId,
         invoiceNo,
         purchaseDate: new Date(purchaseDate + 'T00:00:00.000Z').toISOString(),

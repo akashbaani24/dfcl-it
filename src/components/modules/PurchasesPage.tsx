@@ -64,6 +64,7 @@ export function PurchasesPage() {
           purchaseNo: r.purchaseNo,
           date: new Date(r.purchaseDate).toLocaleDateString(),
           entity: r.entity?.name,
+          shippingEntity: r.shippingEntity?.name || r.entity?.name,
           supplier: r.supplier?.name,
           invoice: r.invoiceNo,
           total: r.totalAmount,
@@ -72,7 +73,8 @@ export function PurchasesPage() {
         columns={[
           { key: 'purchaseNo', label: 'PO No' },
           { key: 'date', label: 'Date' },
-          { key: 'entity', label: 'Entity' },
+          { key: 'entity', label: 'Purchase For' },
+          { key: 'shippingEntity', label: 'Shipping/Receive' },
           { key: 'supplier', label: 'Supplier' },
           { key: 'invoice', label: 'Invoice' },
           { key: 'total', label: 'Total' },
@@ -94,7 +96,8 @@ export function PurchasesPage() {
                   <TableRow>
                     <TableHead>PO No</TableHead>
                     <TableHead>Date</TableHead>
-                    <TableHead>Entity</TableHead>
+                    <TableHead>Purchase For</TableHead>
+                    <TableHead>Shipping/Receive</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Total</TableHead>
@@ -108,6 +111,13 @@ export function PurchasesPage() {
                       <TableCell className="font-mono text-sm">{r.purchaseNo}</TableCell>
                       <TableCell>{new Date(r.purchaseDate).toLocaleDateString()}</TableCell>
                       <TableCell>{r.entity?.name}</TableCell>
+                      <TableCell>
+                        {r.shippingEntity?.name ? (
+                          <span className="text-blue-700 font-medium">{r.shippingEntity?.name}</span>
+                        ) : (
+                          <span className="text-muted-foreground">{r.entity?.name} (default)</span>
+                        )}
+                      </TableCell>
                       <TableCell>{r.supplier?.name}</TableCell>
                       <TableCell>{r.invoiceNo || '—'}</TableCell>
                       <TableCell>{r.totalAmount.toFixed(2)}</TableCell>
@@ -155,7 +165,13 @@ export function PurchasesPage() {
             </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div><span className="text-muted-foreground">Entity:</span> {viewing?.entity?.name}</div>
+            <div><span className="text-muted-foreground">Purchase For (Entity):</span> {viewing?.entity?.name}</div>
+            <div>
+              <span className="text-muted-foreground">Shipping/Stock Receive:</span>{' '}
+              <span className="text-blue-700 font-medium">
+                {viewing?.shippingEntity?.name || viewing?.entity?.name || '—'}
+              </span>
+            </div>
             <div><span className="text-muted-foreground">Supplier:</span> {viewing?.supplier?.name}</div>
             <div><span className="text-muted-foreground">Invoice:</span> {viewing?.invoiceNo || '—'}</div>
             <div><span className="text-muted-foreground">Date:</span> {viewing?.purchaseDate && new Date(viewing.purchaseDate).toLocaleDateString()}</div>

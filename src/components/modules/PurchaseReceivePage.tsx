@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
+import { ComboBox } from '@/components/ui/combobox'
 import { ArrowLeft, ArrowRight, Plus, Trash2, Printer, CheckCircle2, Eye } from 'lucide-react'
 import { list, action, getOne } from '@/lib/api'
 import { toast } from 'sonner'
@@ -39,6 +40,7 @@ export function PurchaseReceivePage() {
   const perm = usePerm('purchase-receive')
   const [receives, setReceives] = useState<any[]>([])
   const [approvedPurchases, setApprovedPurchases] = useState<any[]>([])
+  const [entities, setEntities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
@@ -51,16 +53,22 @@ export function PurchaseReceivePage() {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [viewing, setViewing] = useState<any>(null)
+  // Entity that will actually receive the stock. Defaults to the purchase's
+  // shippingEntityId (the "Shipping/Stock Receive" entity picked at purchase
+  // entry time), but the user can override it here for split shipments etc.
+  const [receiveEntityId, setReceiveEntityId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [r, p] = await Promise.all([
+      const [r, p, e] = await Promise.all([
         list('purchase-receives') as Promise<any[]>,
         list('purchases', { status: 'APPROVED' }) as Promise<any[]>,
+        list('entities') as Promise<any[]>,
       ])
       setReceives(r)
       setApprovedPurchases(p)
+      setEntities(e)
     } finally {
       setLoading(false)
     }
@@ -93,6 +101,10 @@ export function PurchaseReceivePage() {
       setActivePurchase(full)
       setItemLines(lines)
       setNotes('')
+      // Default the receiving entity to the purchase's "Shipping/Stock Receive"
+      // entity (the one chosen at purchase entry time). Falls back to the
+      // purchase entity for legacy rows that don't have shippingEntityId set.
+      setReceiveEntityId(full.shippingEntityId || full.entityId || '')
       setStep(1)
       setShowSteps(true)
     } catch (e: any) {
@@ -142,6 +154,10 @@ export function PurchaseReceivePage() {
       toast.error('Enter received quantity for at least one item')
       return
     }
+    if (!receiveEntityId) {
+      toast.error('Please select the entity that will receive the stock')
+      return
+    }
     // Check duplicate serials
     for (const l of toReceive) {
       const serials = l.units.map((u) => u.serial.trim()).filter(Boolean)
@@ -154,7 +170,9 @@ export function PurchaseReceivePage() {
 
     setSaving(true)
     try {
-      // 1. Create the receive
+      // 1. Create the receive — pass the chosen receiveEntityId so stock
+      //    lands in the entity selected in Step 1 (defaults to the purchase's
+      //    Shipping/Stock Receive entity).
       const r = await action('create-purchase-receive', activePurchase.id, {
         items: toReceive.map((l) => ({
           purchaseItemId: l.purchaseItemId,
@@ -162,6 +180,7 @@ export function PurchaseReceivePage() {
           quantity: l.receivedQty,
           serials: l.units.map((u) => u.serial.trim()).filter(Boolean).join(',') || null,
         })),
+        entityId: receiveEntityId,
         notes,
       })
 
@@ -172,6 +191,7 @@ export function PurchaseReceivePage() {
       setShowSteps(false)
       setActivePurchase(null)
       setItemLines([])
+      setReceiveEntityId('')
       load()
     } catch (e: any) {
       let msg = e.message
@@ -235,11 +255,30 @@ export function PurchaseReceivePage() {
                 </Table>
               </div>
               <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm bg-slate-50/50 border-t">
-                <div><span className="text-muted-foreground">Entity:</span> {activePurchase.entity?.name}</div>
+                <div><span className="text-muted-foreground">Purchase For (Entity):</span> {activePurchase.entity?.name}</div>
                 <div><span className="text-muted-foreground">Supplier:</span> {activePurchase.supplier?.name}</div>
                 <div><span className="text-muted-foreground">Invoice:</span> {activePurchase.invoiceNo || '—'}</div>
                 <div><span className="text-muted-foreground">Total:</span> ৳{activePurchase.totalAmount?.toFixed(2)}</div>
                 <div><span className="text-muted-foreground">Status:</span> {activePurchase.status}</div>
+              </div>
+
+              {/* Shipping / Stock Receive entity selector — THIS is the entity
+                  where stock will actually land when the receive is approved. */}
+              <div className="px-4 py-3 border-t bg-blue-50/40">
+                <Label className="text-xs font-semibold text-blue-700">
+                  Shipping / Stock Receive Entity <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">
+                  Stock will be added to this entity when the receive is confirmed.
+                  Defaults to the entity picked at purchase entry time — change here only if the shipment is being routed to a different entity.
+                </p>
+                <ComboBox
+                  value={receiveEntityId}
+                  onChange={setReceiveEntityId}
+                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
+                  placeholder="Select the entity that will receive this stock"
+                  disabled={!perm.canCreate}
+                />
               </div>
             </CardContent>
           </Card>
@@ -394,6 +433,24 @@ export function PurchaseReceivePage() {
                       <Printer className="h-3.5 w-3.5 mr-1" /> Print
                     </Button>
                     <Button variant="outline" size="sm" onClick={backStep}>← Back</Button>
+                  </div>
+                </div>
+
+                {/* Receiving entity summary banner */}
+                <div className="px-4 py-3 border-b bg-blue-50/40 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Purchase For:</span>{' '}
+                    <span className="font-medium">{activePurchase.entity?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Stock will land in:</span>{' '}
+                    <span className="font-semibold text-blue-700">
+                      {entities.find((e) => e.id === receiveEntityId)?.name || '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Purchase No:</span>{' '}
+                    <span className="font-mono">{activePurchase.purchaseNo}</span>
                   </div>
                 </div>
 

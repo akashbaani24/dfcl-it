@@ -41,6 +41,7 @@ model Entity {
   userEntities      UserEntity[]
   purchaseReceives  PurchaseReceive[]
   internalReceives  InternalReceive[]
+  shippingPurchases Purchase[] @relation("PurchaseShippingEntity")
 
   @@index([parentId])
   @@index([isActive])
@@ -386,6 +387,12 @@ model Purchase {
   purchaseNo      String   @unique
   entityId        String
   entity          Entity   @relation(fields: [entityId], references: [id])
+  // Entity where the stock will physically land when this purchase is received.
+  // Selected during purchase entry as "Shipping/Stock Receive". When the
+  // PurchaseReceive is approved, ItemSerials + StockTransactions are created
+  // against THIS entity (falling back to entityId for legacy rows).
+  shippingEntityId String?
+  shippingEntity   Entity? @relation("PurchaseShippingEntity", fields: [shippingEntityId], references: [id])
   supplierId      String
   supplier        Supplier @relation(fields: [supplierId], references: [id])
   requisitionId   String?
@@ -403,6 +410,7 @@ model Purchase {
   createdAt       DateTime @default(now())
 
   @@index([entityId])
+  @@index([shippingEntityId])
   @@index([supplierId])
   @@index([status])
   @@index([purchaseDate])

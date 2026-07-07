@@ -1,0 +1,618 @@
+     1→'use client'
+     2→import { useEffect, useState, useCallback } from 'react'
+     3→import { useApp } from '@/lib/store'
+     4→import { Button } from '@/components/ui/button'
+     5→import { Input } from '@/components/ui/input'
+     6→import { Label } from '@/components/ui/label'
+     7→import { Card, CardContent } from '@/components/ui/card'
+     8→import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
+     9→import { ArrowLeft, ArrowRight, Plus, Trash2, Printer, CheckCircle2, Eye } from 'lucide-react'
+    10→import { list, action, getOne } from '@/lib/api'
+    11→import { toast } from 'sonner'
+    12→import { usePerm, ExportButtons } from '@/components/shared/Perms'
+    13→import { SearchInput } from '@/components/shared/SearchInput'
+    14→import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
+    15→
+    16→// Generate barcode: yymmdd + 7-digit sequential
+    17→function genBarcode(): string {
+    18→  const now = new Date()
+    19→  const yy = String(now.getFullYear()).slice(-2)
+    20→  const mm = String(now.getMonth() + 1).padStart(2, '0')
+    21→  const dd = String(now.getDate()).padStart(2, '0')
+    22→  const random = String(Math.floor(Math.random() * 10000000)).padStart(7, '0')
+    23→  return `${yy}${mm}${dd}${random}`
+    24→}
+    25→
+    26→type Unit = { barcode: string; serial: string }
+    27→type ItemLine = {
+    28→  purchaseItemId: string
+    29→  itemId: string
+    30→  itemName: string
+    31→  itemCode: string
+    32→  orderedQty: number
+    33→  receivedQty: number
+    34→  remainingQty: number
+    35→  units: Unit[]
+    36→}
+    37→
+    38→export function PurchaseReceivePage() {
+    39→  const perm = usePerm('purchase-receive')
+    40→  const [receives, setReceives] = useState<any[]>([])
+    41→  const [approvedPurchases, setApprovedPurchases] = useState<any[]>([])
+    42→  const [loading, setLoading] = useState(true)
+    43→  const [q, setQ] = useState('')
+    44→  const [filtered, setFiltered] = useState<any[]>([])
+    45→
+    46→  // Step-by-step receive state
+    47→  const [showSteps, setShowSteps] = useState(false)
+    48→  const [step, setStep] = useState(1)
+    49→  const [activePurchase, setActivePurchase] = useState<any>(null)
+    50→  const [itemLines, setItemLines] = useState<ItemLine[]>([])
+    51→  const [notes, setNotes] = useState('')
+    52→  const [saving, setSaving] = useState(false)
+    53→  const [viewing, setViewing] = useState<any>(null)
+    54→
+    55→  const load = useCallback(async () => {
+    56→    setLoading(true)
+    57→    try {
+    58→      const [r, p] = await Promise.all([
+    59→        list('purchase-receives') as Promise<any[]>,
+    60→        list('purchases', { status: 'APPROVED' }) as Promise<any[]>,
+    61→      ])
+    62→      setReceives(r)
+    63→      setApprovedPurchases(p)
+    64→    } finally {
+    65→      setLoading(false)
+    66→    }
+    67→  }, [])
+    68→
+    69→  useEffect(() => { load() }, [load])
+    70→
+    71→  useEffect(() => {
+    72→    if (!q) { setFiltered(receives); return }
+    73→    const ql = q.toLowerCase()
+    74→    setFiltered(receives.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
+    75→  }, [q, receives])
+    76→
+    77→  // ===== Step navigation =====
+    78→  const startReceive = async (purchase: any) => {
+    79→    try {
+    80→      const res = await fetch(`/api/resource?slug=purchases&id=${purchase.id}`)
+    81→      if (!res.ok) throw new Error(await res.text())
+    82→      const full = await res.json()
+    83→      const lines: ItemLine[] = (full.items || []).map((it: any) => ({
+    84→        purchaseItemId: it.id,
+    85→        itemId: it.itemId,
+    86→        itemName: it.item?.name || '—',
+    87→        itemCode: it.item?.itemCode || '—',
+    88→        orderedQty: it.quantity,
+    89→        receivedQty: 0,
+    90→        remainingQty: it.quantity,
+    91→        units: [],
+    92→      }))
+    93→      setActivePurchase(full)
+    94→      setItemLines(lines)
+    95→      setNotes('')
+    96→      setStep(1)
+    97→      setShowSteps(true)
+    98→    } catch (e: any) {
+    99→      toast.error(e.message)
+   100→    }
+   101→  }
+   102→
+   103→  const nextStep = () => {
+   104→    if (step === 1) { setStep(2); return }
+   105→    if (step === 2) { setStep(3); return }
+   106→    if (step === 3) { setStep(4); return }
+   107→  }
+   108→  const backStep = () => {
+   109→    if (step > 1) setStep(step - 1)
+   110→  }
+   111→
+   112→  // Step 3: update received qty → generate barcodes
+   113→  const updateReceivedQty = (purchaseItemId: string, qty: number) => {
+   114→    setItemLines((prev) => prev.map((l) => {
+   115→      if (l.purchaseItemId !== purchaseItemId) return l
+   116→      const safeQty = Math.min(qty, l.orderedQty)
+   117→      const newUnits: Unit[] = []
+   118→      for (let i = 0; i < safeQty; i++) {
+   119→        if (l.units[i]) {
+   120→          newUnits.push({ barcode: l.units[i].barcode, serial: l.units[i].serial })
+   121→        } else {
+   122→          newUnits.push({ barcode: genBarcode(), serial: '' })
+   123→        }
+   124→      }
+   125→      return { ...l, receivedQty: safeQty, remainingQty: l.orderedQty - safeQty, units: newUnits }
+   126→    }))
+   127→  }
+   128→
+   129→  const updateUnitSerial = (purchaseItemId: string, unitIndex: number, serial: string) => {
+   130→    setItemLines((prev) => prev.map((l) => {
+   131→      if (l.purchaseItemId !== purchaseItemId) return l
+   132→      const newUnits = [...l.units]
+   133→      if (newUnits[unitIndex]) newUnits[unitIndex] = { ...newUnits[unitIndex], serial }
+   134→      return { ...l, units: newUnits }
+   135→    }))
+   136→  }
+   137→
+   138→  // Step 4: Submit → create receive + approve → stock hit
+   139→  const submitReceive = async () => {
+   140→    const toReceive = itemLines.filter((l) => l.receivedQty > 0)
+   141→    if (toReceive.length === 0) {
+   142→      toast.error('Enter received quantity for at least one item')
+   143→      return
+   144→    }
+   145→    // Check duplicate serials
+   146→    for (const l of toReceive) {
+   147→      const serials = l.units.map((u) => u.serial.trim()).filter(Boolean)
+   148→      const unique = new Set(serials)
+   149→      if (unique.size !== serials.length) {
+   150→        toast.error(`${l.itemName}: duplicate serial numbers. Each must be unique.`)
+   151→        return
+   152→      }
+   153→    }
+   154→
+   155→    setSaving(true)
+   156→    try {
+   157→      // 1. Create the receive
+   158→      const r = await action('create-purchase-receive', activePurchase.id, {
+   159→        items: toReceive.map((l) => ({
+   160→          purchaseItemId: l.purchaseItemId,
+   161→          itemId: l.itemId,
+   162→          quantity: l.receivedQty,
+   163→          serials: l.units.map((u) => u.serial.trim()).filter(Boolean).join(',') || null,
+   164→        })),
+   165→        notes,
+   166→      })
+   167→
+   168→      // 2. Immediately approve → stock hit + barcode-wise ItemSerials
+   169→      await action('approve-purchase-receive', r.id)
+   170→
+   171→      toast.success(`Receive ${r.receiveNo} created & approved. Stock updated barcode-wise.`)
+   172→      setShowSteps(false)
+   173→      setActivePurchase(null)
+   174→      setItemLines([])
+   175→      load()
+   176→    } catch (e: any) {
+   177→      let msg = e.message
+   178→      try { const p = JSON.parse(msg); if (p.error) msg = p.error } catch {}
+   179→      toast.error(msg)
+   180→    } finally {
+   181→      setSaving(false)
+   182→    }
+   183→  }
+   184→
+   185→  // ===== Render =====
+   186→  if (showSteps && activePurchase) {
+   187→    return (
+   188→      <div>
+   189→        {/* Header */}
+   190→        <div className="flex items-center justify-between mb-4">
+   191→          <div className="flex items-center gap-3">
+   192→            <Button variant="outline" size="icon" onClick={() => { setShowSteps(false); setStep(1) }}>
+   193→              <ArrowLeft className="h-4 w-4" />
+   194→            </Button>
+   195→            <div>
+   196→              <h1 className="text-xl font-semibold">Purchase Receive</h1>
+   197→              <p className="text-xs text-muted-foreground">Step {step} of 4</p>
+   198→            </div>
+   199→          </div>
+   200→          {/* Step indicator */}
+   201→          <div className="flex items-center gap-2">
+   202→            {[1, 2, 3, 4].map((s) => (
+   203→              <div key={s} className={`h-2 w-10 rounded-full ${s <= step ? 'bg-blue-600' : 'bg-slate-200'}`} />
+   204→            ))}
+   205→          </div>
+   206→        </div>
+   207→
+   208→        {/* ===== STEP 1: Purchase Header ===== */}
+   209→        {step === 1 && (
+   210→          <Card>
+   211→            <CardContent className="p-0">
+   212→              <div className="bg-slate-50 px-4 py-2 border-b font-semibold text-sm text-center">Purchase Receive</div>
+   213→              <div className="px-4 py-2 flex items-center justify-between border-b">
+   214→                <span className="text-sm font-medium">Step-1</span>
+   215→                <Button size="sm" onClick={nextStep}>Next →</Button>
+   216→              </div>
+   217→              <div className="overflow-x-auto">
+   218→                <Table>
+   219→                  <TableHeader>
+   220→                    <TableRow>
+   221→                      <TableHead className="w-16">Sl No</TableHead>
+   222→                      <TableHead>Purchase Date</TableHead>
+   223→                      <TableHead>Purchase ID</TableHead>
+   224→                      <TableHead>Purchase Entry By</TableHead>
+   225→                    </TableRow>
+   226→                  </TableHeader>
+   227→                  <TableBody>
+   228→                    <TableRow className="cursor-default">
+   229→                      <TableCell>1</TableCell>
+   230→                      <TableCell>{new Date(activePurchase.purchaseDate).toLocaleDateString()}</TableCell>
+   231→                      <TableCell className="font-mono">{activePurchase.purchaseNo}</TableCell>
+   232→                      <TableCell>{activePurchase.createdBy || 'Admin'}</TableCell>
+   233→                    </TableRow>
+   234→                  </TableBody>
+   235→                </Table>
+   236→              </div>
+   237→              <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm bg-slate-50/50 border-t">
+   238→                <div><span className="text-muted-foreground">Entity:</span> {activePurchase.entity?.name}</div>
+   239→                <div><span className="text-muted-foreground">Supplier:</span> {activePurchase.supplier?.name}</div>
+   240→                <div><span className="text-muted-foreground">Invoice:</span> {activePurchase.invoiceNo || '—'}</div>
+   241→                <div><span className="text-muted-foreground">Total:</span> ৳{activePurchase.totalAmount?.toFixed(2)}</div>
+   242→                <div><span className="text-muted-foreground">Status:</span> {activePurchase.status}</div>
+   243→              </div>
+   244→            </CardContent>
+   245→          </Card>
+   246→        )}
+   247→
+   248→        {/* ===== STEP 2: Item-level details ===== */}
+   249→        {step === 2 && (
+   250→          <Card>
+   251→            <CardContent className="p-0">
+   252→              <div className="bg-slate-50 px-4 py-2 border-b font-semibold text-sm text-center">Purchase Receive</div>
+   253→              <div className="px-4 py-2 flex items-center justify-between border-b">
+   254→                <span className="text-sm font-medium">Step-2</span>
+   255→                <div className="flex gap-2">
+   256→                  <Button variant="outline" size="sm" onClick={backStep}>← Back</Button>
+   257→                  <Button size="sm" onClick={nextStep}>Next →</Button>
+   258→                </div>
+   259→              </div>
+   260→              <div className="overflow-x-auto">
+   261→                <Table>
+   262→                  <TableHeader>
+   263→                    <TableRow>
+   264→                      <TableHead className="w-16">Sl No</TableHead>
+   265→                      <TableHead>Item Name</TableHead>
+   266→                      <TableHead className="w-28">Purchase Qty</TableHead>
+   267→                    </TableRow>
+   268→                  </TableHeader>
+   269→                  <TableBody>
+   270→                    {itemLines.map((l, i) => (
+   271→                      <TableRow key={l.purchaseItemId}>
+   272→                        <TableCell>{i + 1}</TableCell>
+   273→                        <TableCell>
+   274→                          <div className="font-medium">{l.itemName}</div>
+   275→                          <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode}</div>
+   276→                        </TableCell>
+   277→                        <TableCell className="font-medium">{l.orderedQty}</TableCell>
+   278→                      </TableRow>
+   279→                    ))}
+   280→                  </TableBody>
+   281→                </Table>
+   282→              </div>
+   283→              <div className="px-4 py-2 flex justify-end border-t">
+   284→                <Button size="sm" onClick={nextStep}>Next →</Button>
+   285→              </div>
+   286→            </CardContent>
+   287→          </Card>
+   288→        )}
+   289→
+   290→        {/* ===== STEP 3: Received Qty + Barcode + Serial ===== */}
+   291→        {step === 3 && (
+   292→          <div className="space-y-4">
+   293→            <Card>
+   294→              <CardContent className="p-0">
+   295→                <div className="bg-slate-50 px-4 py-2 border-b font-semibold text-sm text-center">Purchase Receive</div>
+   296→                <div className="px-4 py-2 flex items-center justify-between border-b">
+   297→                  <span className="text-sm font-medium">Step-3</span>
+   298→                  <Button variant="outline" size="sm" onClick={backStep}>← Back</Button>
+   299→                </div>
+   300→                {/* Summary table */}
+   301→                <div className="overflow-x-auto">
+   302→                  <Table>
+   303→                    <TableHeader>
+   304→                      <TableRow>
+   305→                        <TableHead>Item Name</TableHead>
+   306→                        <TableHead className="w-28">Purchase Qty</TableHead>
+   307→                        <TableHead className="w-28">Received Qty</TableHead>
+   308→                        <TableHead className="w-28">Remaining Qty</TableHead>
+   309→                      </TableRow>
+   310→                    </TableHeader>
+   311→                    <TableBody>
+   312→                      {itemLines.map((l) => (
+   313→                        <TableRow key={l.purchaseItemId}>
+   314→                          <TableCell className="font-medium">{l.itemName}</TableCell>
+   315→                          <TableCell>{l.orderedQty}</TableCell>
+   316→                          <TableCell>
+   317→                            <Input
+   318→                              type="number"
+   319→                              min={0}
+   320→                              max={l.orderedQty}
+   321→                              value={l.receivedQty}
+   322→                              onChange={(e) => updateReceivedQty(l.purchaseItemId, Number(e.target.value))}
+   323→                              className="w-20 h-8"
+   324→                              disabled={!perm.canCreate}
+   325→                            />
+   326→                          </TableCell>
+   327→                          <TableCell className="text-amber-600 font-medium">{l.remainingQty}</TableCell>
+   328→                        </TableRow>
+   329→                      ))}
+   330→                    </TableBody>
+   331→                  </Table>
+   332→                </div>
+   333→              </CardContent>
+   334→            </Card>
+   335→
+   336→            {/* Per-item barcode + serial table */}
+   337→            {itemLines.filter((l) => l.receivedQty > 0).map((l) => (
+   338→              <Card key={l.purchaseItemId}>
+   339→                <CardContent className="p-0">
+   340→                  <div className="bg-slate-50 px-4 py-2 border-b font-semibold text-sm">{l.itemName}</div>
+   341→                  <div className="overflow-x-auto">
+   342→                    <Table>
+   343→                      <TableHeader>
+   344→                        <TableRow>
+   345→                          <TableHead className="w-12">Sl No</TableHead>
+   346→                          <TableHead>Barcode Number (Auto)</TableHead>
+   347→                          <TableHead>Serial Number (By User Manual)</TableHead>
+   348→                        </TableRow>
+   349→                      </TableHeader>
+   350→                      <TableBody>
+   351→                        {l.units.map((unit, idx) => (
+   352→                          <TableRow key={idx}>
+   353→                            <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
+   354→                            <TableCell>
+   355→                              <div className="flex items-center gap-1 bg-slate-50 border rounded px-2 h-8">
+   356→                                <span className="font-mono text-xs text-slate-600">{unit.barcode}</span>
+   357→                              </div>
+   358→                            </TableCell>
+   359→                            <TableCell>
+   360→                              <Input
+   361→                                value={unit.serial}
+   362→                                onChange={(e) => updateUnitSerial(l.purchaseItemId, idx, e.target.value)}
+   363→                                placeholder="Enter serial from product body (optional)"
+   364→                                className="font-mono text-xs h-8"
+   365→                                disabled={!perm.canCreate}
+   366→                              />
+   367→                            </TableCell>
+   368→                          </TableRow>
+   369→                        ))}
+   370→                      </TableBody>
+   371→                    </Table>
+   372→                  </div>
+   373→                </CardContent>
+   374→              </Card>
+   375→            ))}
+   376→
+   377→            <div className="flex justify-end gap-2">
+   378→              <Button variant="outline" size="sm" onClick={backStep}>← Back</Button>
+   379→              <Button size="sm" onClick={nextStep}>Next →</Button>
+   380→            </div>
+   381→          </div>
+   382→        )}
+   383→
+   384→        {/* ===== STEP 4: Final Summary + Submit ===== */}
+   385→        {step === 4 && (
+   386→          <div className="space-y-4">
+   387→            <Card>
+   388→              <CardContent className="p-0">
+   389→                <div className="bg-slate-50 px-4 py-2 border-b font-semibold text-sm text-center">Purchase Receive Details</div>
+   390→                <div className="px-4 py-2 flex items-center justify-between border-b">
+   391→                  <span className="text-sm font-medium">Step-4</span>
+   392→                  <div className="flex gap-2">
+   393→                    <Button variant="outline" size="sm" onClick={() => window.print()}>
+   394→                      <Printer className="h-3.5 w-3.5 mr-1" /> Print
+   395→                    </Button>
+   396→                    <Button variant="outline" size="sm" onClick={backStep}>← Back</Button>
+   397→                  </div>
+   398→                </div>
+   399→
+   400→                {itemLines.filter((l) => l.receivedQty > 0).map((l) => (
+   401→                  <div key={l.purchaseItemId} className="border-b last:border-b-0">
+   402→                    <div className="bg-slate-50/50 px-4 py-2 text-sm font-medium border-b">
+   403→                      {l.itemName} — Qty: {l.receivedQty} / {l.orderedQty}
+   404→                    </div>
+   405→                    <div className="overflow-x-auto">
+   406→                      <Table>
+   407→                        <TableHeader>
+   408→                          <TableRow>
+   409→                            <TableHead className="w-12">Sl No</TableHead>
+   410→                            <TableHead>Barcode Number (Auto)</TableHead>
+   411→                            <TableHead>Serial Number</TableHead>
+   412→                          </TableRow>
+   413→                        </TableHeader>
+   414→                        <TableBody>
+   415→                          {l.units.map((unit, idx) => (
+   416→                            <TableRow key={idx}>
+   417→                              <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
+   418→                              <TableCell className="font-mono text-xs">{unit.barcode}</TableCell>
+   419→                              <TableCell className="font-mono text-xs">{unit.serial || '—'}</TableCell>
+   420→                            </TableRow>
+   421→                          ))}
+   422→                        </TableBody>
+   423→                      </Table>
+   424→                    </div>
+   425→                  </div>
+   426→                ))}
+   427→
+   428→                <div className="px-4 py-3 border-t bg-slate-50">
+   429→                  <Label className="text-xs">Notes</Label>
+   430→                  <Input
+   431→                    value={notes}
+   432→                    onChange={(e) => setNotes(e.target.value)}
+   433→                    placeholder="Optional notes..."
+   434→                    className="mt-1 h-9"
+   435→                  />
+   436→                </div>
+   437→              </CardContent>
+   438→            </Card>
+   439→
+   440→            <div className="flex justify-end gap-2">
+   441→              <Button variant="outline" onClick={backStep}>← Back</Button>
+   442→              <Button onClick={submitReceive} disabled={saving || !perm.canCreate} className="gap-1 bg-emerald-600 hover:bg-emerald-700">
+   443→                <CheckCircle2 className="h-4 w-4" />
+   444→                {saving ? 'Submitting...' : 'Submit / Confirmed'}
+   445→              </Button>
+   446→            </div>
+   447→          </div>
+   448→        )}
+   449→      </div>
+   450→    )
+   451→  }
+   452→
+   453→  // ===== Default view: approved purchases + receive list =====
+   454→  return (
+   455→    <div>
+   456→      <PageHeader
+   457→        title="Purchase Receive"
+   458→        description="Receive stock against approved purchase orders. Step-by-step: Header → Items → Receive + Barcode/Serial → Confirm."
+   459→      />
+   460→
+   461→      {/* Approved purchases awaiting receive */}
+   462→      <Card className="mb-4">
+   463→        <CardContent className="p-0">
+   464→          <div className="px-4 py-2 border-b font-semibold text-sm bg-slate-50">
+   465→            Approved Purchases Awaiting Receive ({approvedPurchases.length})
+   466→          </div>
+   467→          {approvedPurchases.length === 0 ? (
+   468→            <div className="py-6 text-center text-sm text-muted-foreground">No approved purchases pending receive</div>
+   469→          ) : (
+   470→            <div className="overflow-x-auto">
+   471→              <Table>
+   472→                <TableHeader>
+   473→                  <TableRow>
+   474→                    <TableHead>PO No</TableHead>
+   475→                    <TableHead>Entity</TableHead>
+   476→                    <TableHead>Supplier</TableHead>
+   477→                    <TableHead>Date</TableHead>
+   478→                    <TableHead className="text-right">Action</TableHead>
+   479→                  </TableRow>
+   480→                </TableHeader>
+   481→                <TableBody>
+   482→                  {approvedPurchases.map((p: any) => (
+   483→                    <TableRow key={p.id}>
+   484→                      <TableCell className="font-mono text-sm">{p.purchaseNo}</TableCell>
+   485→                      <TableCell>{p.entity?.name}</TableCell>
+   486→                      <TableCell>{p.supplier?.name}</TableCell>
+   487→                      <TableCell>{new Date(p.purchaseDate).toLocaleDateString()}</TableCell>
+   488→                      <TableCell className="text-right">
+   489→                        {perm.canCreate && (
+   490→                          <Button size="sm" className="gap-1" onClick={() => startReceive(p)}>
+   491→                            Receive
+   492→                          </Button>
+   493→                        )}
+   494→                      </TableCell>
+   495→                    </TableRow>
+   496→                  ))}
+   497→                </TableBody>
+   498→              </Table>
+   499→            </div>
+   500→          )}
+   501→        </CardContent>
+   502→      </Card>
+   503→
+   504→      {/* All receives */}
+   505→      <div className="flex items-center gap-2 mb-3 flex-wrap">
+   506→        <SearchInput value={q} onChange={setQ} placeholder="Search receives..." />
+   507→        <ExportButtons
+   508→          module="purchase-receive"
+   509→          title="Purchase Receives"
+   510→          rows={receives.map((r) => ({
+   511→            receiveNo: r.receiveNo,
+   512→            purchaseNo: r.purchase?.purchaseNo,
+   513→            entity: r.entity?.name,
+   514→            date: r.receiveDate ? new Date(r.receiveDate).toLocaleDateString() : '',
+   515→            status: r.status,
+   516→            items: r.items?.length || 0,
+   517→          }))}
+   518→          columns={[
+   519→            { key: 'receiveNo', label: 'Receive No' },
+   520→            { key: 'purchaseNo', label: 'Purchase No' },
+   521→            { key: 'entity', label: 'Entity' },
+   522→            { key: 'date', label: 'Date' },
+   523→            { key: 'status', label: 'Status' },
+   524→            { key: 'items', label: 'Items' },
+   525→          ]}
+   526→        />
+   527→      </div>
+   528→
+   529→      {loading ? (
+   530→        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
+   531→      ) : filtered.length === 0 ? (
+   532→        <EmptyState title="No purchase receives yet" hint="Receive stock from an approved purchase above" />
+   533→      ) : (
+   534→        <Card>
+   535→          <CardContent className="p-0">
+   536→            <div className="overflow-x-auto">
+   537→              <Table>
+   538→                <TableHeader>
+   539→                  <TableRow>
+   540→                    <TableHead>Receive No</TableHead>
+   541→                    <TableHead>Purchase No</TableHead>
+   542→                    <TableHead>Entity</TableHead>
+   543→                    <TableHead>Date</TableHead>
+   544→                    <TableHead>Status</TableHead>
+   545→                    <TableHead>Items</TableHead>
+   546→                    <TableHead className="text-right">Actions</TableHead>
+   547→                  </TableRow>
+   548→                </TableHeader>
+   549→                <TableBody>
+   550→                  {filtered.map((r: any) => (
+   551→                    <TableRow key={r.id}>
+   552→                      <TableCell className="font-mono text-sm">{r.receiveNo}</TableCell>
+   553→                      <TableCell className="font-mono text-sm">{r.purchase?.purchaseNo || '—'}</TableCell>
+   554→                      <TableCell>{r.entity?.name}</TableCell>
+   555→                      <TableCell>{new Date(r.receiveDate).toLocaleDateString()}</TableCell>
+   556→                      <TableCell><Badge status={r.status} /></TableCell>
+   557→                      <TableCell>{r.items?.length || 0}</TableCell>
+   558→                      <TableCell className="text-right">
+   559→                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)}>
+   560→                          <Eye className="h-3.5 w-3.5" />
+   561→                        </Button>
+   562→                      </TableCell>
+   563→                    </TableRow>
+   564→                  ))}
+   565→                </TableBody>
+   566→              </Table>
+   567→            </div>
+   568→          </CardContent>
+   569→        </Card>
+   570→      )}
+   571→
+   572→      {/* View dialog */}
+   573→      {viewing && (
+   574→        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewing(null)}>
+   575→          <div className="bg-card rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+   576→            <h3 className="text-lg font-semibold mb-2">Receive {viewing.receiveNo}</h3>
+   577→            <p className="text-xs text-muted-foreground mb-4">Status: {viewing.status}</p>
+   578→            <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+   579→              <div><span className="text-muted-foreground">Purchase:</span> {viewing.purchase?.purchaseNo}</div>
+   580→              <div><span className="text-muted-foreground">Entity:</span> {viewing.entity?.name}</div>
+   581→              <div><span className="text-muted-foreground">Date:</span> {viewing.receiveDate && new Date(viewing.receiveDate).toLocaleDateString()}</div>
+   582→              <div><span className="text-muted-foreground">Approved By:</span> {viewing.approvedBy || '—'}</div>
+   583→            </div>
+   584→            <div className="border rounded-md overflow-x-auto">
+   585→              <Table>
+   586→                <TableHeader>
+   587→                  <TableRow>
+   588→                    <TableHead>Item</TableHead>
+   589→                    <TableHead>Qty</TableHead>
+   590→                    <TableHead>Barcode</TableHead>
+   591→                    <TableHead>Serials</TableHead>
+   592→                  </TableRow>
+   593→                </TableHeader>
+   594→                <TableBody>
+   595→                  {viewing.items?.map((it: any) => (
+   596→                    <TableRow key={it.id}>
+   597→                      <TableCell>
+   598→                        <div className="text-sm font-medium">{it.item?.name}</div>
+   599→                        <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
+   600→                      </TableCell>
+   601→                      <TableCell>{it.quantity}</TableCell>
+   602→                      <TableCell className="font-mono text-xs">{it.barcodes || '—'}</TableCell>
+   603→                      <TableCell className="font-mono text-xs">{it.serials || '—'}</TableCell>
+   604→                    </TableRow>
+   605→                  ))}
+   606→                </TableBody>
+   607→              </Table>
+   608→            </div>
+   609→            <div className="flex justify-end mt-4">
+   610→              <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
+   611→            </div>
+   612→          </div>
+   613→        </div>
+   614→      )}
+   615→    </div>
+   616→  )
+   617→}
+   618→
