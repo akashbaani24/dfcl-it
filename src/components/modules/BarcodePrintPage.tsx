@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { ComboBox } from '@/components/ui/combobox'
 import { AsyncComboBox } from '@/components/ui/async-combobox'
 import { Printer, Search, ScanLine, Package, X, Loader2 } from 'lucide-react'
+import JsBarcode from 'jsbarcode'
 import { list } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -348,33 +349,35 @@ function PrintPreview({ items, onClose }: { items: SearchResult[]; onClose: () =
 }
 
 /**
- * Individual barcode label — shows item name, barcode, serial, qty.
- * The barcode is rendered as CSS vertical lines (visual representation).
- * The actual barcode number is also printed as text below the lines.
+ * Individual barcode label — shows item name, REAL scannable barcode,
+ * serial number, and qty.
+ *
+ * Uses JsBarcode (Code 128 standard) to generate a REAL barcode that can
+ * be scanned by physical barcode scanners. Code 128 supports all ASCII
+ * characters and is the most common barcode standard for inventory systems.
+ *
+ * The barcode is rendered as an SVG (crisp at any size, prints cleanly).
  */
 function BarcodeLabel({ item }: { item: SearchResult }) {
-  // Generate a pseudo-barcode visual from the barcode number.
-  // Each digit maps to a pattern of vertical lines of varying widths.
-  const barcodeLines = useMemo(() => {
-    if (!item.barcode) return []
-    const lines: Array<{ width: number; black: boolean }> = []
-    // Start guard
-    lines.push({ width: 2, black: true })
-    lines.push({ width: 1, black: false })
-    // Each character → 3 lines (black, white, black) with varying widths
-    for (const ch of item.barcode) {
-      const code = ch.charCodeAt(0)
-      const w1 = (code % 3) + 1
-      const w2 = ((code >> 2) % 3) + 1
-      const w3 = ((code >> 4) % 3) + 1
-      lines.push({ width: w1, black: true })
-      lines.push({ width: w2, black: false })
-      lines.push({ width: w3, black: true })
+  const svgRef = useRef<SVGSVGElement>(null)
+
+  useEffect(() => {
+    if (svgRef.current && item.barcode) {
+      try {
+        JsBarcode(svgRef.current, item.barcode, {
+          format: 'CODE128',     // Standard format — supports all ASCII
+          width: 2,              // Bar width (px)
+          height: 50,            // Bar height (px)
+          displayValue: true,    // Show the barcode number below the bars
+          fontSize: 12,
+          margin: 4,
+          textMargin: 2,
+        })
+      } catch (e) {
+        // If the barcode value is invalid for Code 128, show fallback
+        console.error('Barcode generation error:', e)
+      }
     }
-    // End guard
-    lines.push({ width: 1, black: false })
-    lines.push({ width: 2, black: true })
-    return lines
   }, [item.barcode])
 
   return (
@@ -384,29 +387,13 @@ function BarcodeLabel({ item }: { item: SearchResult }) {
         {item.itemName}
       </div>
 
-      {/* Barcode visual */}
-      <div className="flex items-end justify-center h-12 mb-1">
-        {barcodeLines.length > 0 ? (
-          <div className="flex items-end h-full">
-            {barcodeLines.map((line, i) => (
-              <div
-                key={i}
-                style={{
-                  width: `${line.width}px`,
-                  height: '100%',
-                  backgroundColor: line.black ? '#000' : 'transparent',
-                }}
-              />
-            ))}
-          </div>
+      {/* Real Scannable Barcode (SVG — Code 128) */}
+      <div className="flex items-center justify-center mb-1">
+        {item.barcode ? (
+          <svg ref={svgRef}></svg>
         ) : (
-          <div className="text-[10px] text-muted-foreground">No barcode</div>
+          <div className="text-[10px] text-muted-foreground py-6">No barcode</div>
         )}
-      </div>
-
-      {/* Barcode number */}
-      <div className="text-[9px] font-mono text-center font-bold mb-1">
-        {item.barcode || '—'}
       </div>
 
       {/* Serial Number */}
