@@ -60,7 +60,7 @@ export function SalesEntryPage() {
   const [brokerName, setBrokerName] = useState('')
   const [brokerPhone, setBrokerPhone] = useState('')
   const [brokerCommission, setBrokerCommission] = useState(0)
-  const [makingCharges, setMakingCharges] = useState(0)
+  const [repairCharge, setRepairCharge] = useState(0)
   const [discount, setDiscount] = useState(0)
 
   // Customer search
@@ -179,7 +179,7 @@ export function SalesEntryPage() {
   }
 
   const subTotal = lines.reduce((s, l) => s + (l.totalPrice || 0), 0)
-  const totalAmount = subTotal + (makingCharges || 0)
+  const totalAmount = subTotal + (repairCharge || 0)
   const grandTotal = totalAmount - (discount || 0)
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
 
@@ -664,11 +664,11 @@ export function SalesEntryPage() {
                 <span className="font-medium">৳{subTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Making Charges</span>
+                <span className="text-muted-foreground">Repair Charge</span>
                 <Input
                   type="number"
-                  value={makingCharges}
-                  onChange={(e) => setMakingCharges(Number(e.target.value))}
+                  value={repairCharge}
+                  onChange={(e) => setRepairCharge(Number(e.target.value))}
                   className="h-7 w-24 text-right"
                 />
               </div>
