@@ -44,7 +44,8 @@ export const SECTIONS: Section[] = [
     icon: ShoppingCart,
     items: [
       { key: 'purchase-requisitions', label: 'Purchase Requisition', icon: ClipboardList },
-      { key: 'purchases', label: 'Purchase & Approval', icon: FileCheck2 },
+      { key: 'purchases', label: 'Purchase', icon: ShoppingCart },
+      { key: 'purchase-approvals', label: 'Purchase Approval', icon: FileCheck2 },
       { key: 'purchase-returns', label: 'Purchase Return', icon: Undo2 },
       { key: 'purchase-receive', label: 'Purchase Receive', icon: PackageCheck },
     ],

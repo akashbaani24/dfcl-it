@@ -23,6 +23,7 @@ import { ItemSerialsPage } from '@/components/modules/ItemSerialsPage'
 import { NewsTickerPage } from '@/components/modules/NewsTickerPage'
 import { PurchaseRequisitionsPage } from '@/components/modules/PurchaseRequisitionsPage'
 import { PurchasesPage } from '@/components/modules/PurchasesPage'
+import { PurchaseApprovalPage } from '@/components/modules/PurchaseApprovalPage'
 import { PurchaseReturnsPage } from '@/components/modules/PurchaseReturnsPage'
 import { PurchaseReceivePage } from '@/components/modules/PurchaseReceivePage'
 import { StockAllPage } from '@/components/modules/StockAllPage'
@@ -89,7 +90,7 @@ export function AppShell() {
         'dashboard', 'entities', 'departments', 'employees', 'uoms', 'suppliers',
         'categories', 'items', 'item-serials', 'news-ticker', 'login-settings',
         'account-types', 'bank-infos', 'purchase-requisitions', 'purchases',
-        'purchase-returns', 'purchase-receive', 'stock-all', 'stock-mine',
+        'purchase-approvals', 'purchase-returns', 'purchase-receive', 'stock-all', 'stock-mine',
         'internal-transfers', 'internal-receive', 'adjustments', 'sales',
         'sales-delivery', 'sales-returns', 'sales-refunds', 'accounts-expenses',
         'accounts-receive', 'reports-stock', 'reports-purchase', 'reports-sales',
@@ -285,6 +286,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'news-ticker': return <NewsTickerPage />
     case 'purchase-requisitions': return <PurchaseRequisitionsPage />
     case 'purchases': return <PurchasesPage />
+    case 'purchase-approvals': return <PurchaseApprovalPage />
     case 'purchase-returns': return <PurchaseReturnsPage />
     case 'purchase-receive': return <PurchaseReceivePage />
     case 'stock-all': return <StockAllPage />

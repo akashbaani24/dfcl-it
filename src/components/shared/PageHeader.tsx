@@ -76,9 +76,12 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 export function Badge({ status }: { status: string }) {
   const map: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-800',
+    SUBMITTED: 'bg-yellow-100 text-yellow-800',
+    SENT_BACK: 'bg-orange-100 text-orange-800',
     APPROVED: 'bg-emerald-100 text-emerald-800',
     REJECTED: 'bg-rose-100 text-rose-800',
     RECEIVED: 'bg-emerald-100 text-emerald-800',
+    PARTIAL_RECEIVED: 'bg-sky-100 text-sky-800',
     DELIVERED: 'bg-emerald-100 text-emerald-800',
     RETURNED: 'bg-amber-100 text-amber-800',
     REFUNDED: 'bg-rose-100 text-rose-800',

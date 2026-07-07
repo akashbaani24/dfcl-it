@@ -19,7 +19,8 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'bank-infos', label: 'Bank Info', section: 'Company Setup' },
   // Purchase
   { key: 'purchase-requisitions', label: 'Purchase Requisition', section: 'Purchase' },
-  { key: 'purchases', label: 'Purchase & Approval', section: 'Purchase' },
+  { key: 'purchases', label: 'Purchase', section: 'Purchase' },
+  { key: 'purchase-approvals', label: 'Purchase Approval', section: 'Purchase' },
   { key: 'purchase-returns', label: 'Purchase Return', section: 'Purchase' },
   { key: 'purchase-receive', label: 'Purchase Receive', section: 'Purchase' },
   // Inventory

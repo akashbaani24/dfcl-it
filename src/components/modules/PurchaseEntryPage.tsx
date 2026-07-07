@@ -140,7 +140,13 @@ export function PurchaseEntryPage() {
         invoiceNo,
         purchaseDate: new Date(purchaseDate + 'T00:00:00.000Z').toISOString(),
         totalAmount: grandTotal,
-        status: 'PENDING',
+        // New purchases are created as SUBMITTED (enter the approval queue).
+        // Editing a SENT_BACK purchase re-submits it back to SUBMITTED so it
+        // re-enters the Purchase Approval queue.
+        status: 'SUBMITTED',
+        // Clear any prior approval info when (re-)submitting
+        approvedBy: null,
+        approvedAt: null,
         createdBy: entryBy,
         notes,
         items: {

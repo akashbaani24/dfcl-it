@@ -61,6 +61,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(updated)
       }
 
+      case 'send-back-purchase': {
+        // Mark purchase as SENT_BACK so the buyer can edit & re-submit it from
+        // the Purchase page. Re-submitting (editing in PurchaseEntryPage) flips
+        // the status back to SUBMITTED and the purchase re-enters the approval queue.
+        const purchase = await db.purchase.findUnique({ where: { id } })
+        if (!purchase) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+        const updated = await db.purchase.update({
+          where: { id },
+          data: {
+            status: 'SENT_BACK',
+            approvedBy: null,
+            approvedAt: null,
+          },
+          include: { entity: true, supplier: true, items: { include: { item: true } } },
+        })
+        return NextResponse.json(updated)
+      }
+
       case 'create-purchase-receive': {
         // Frontend sends: extra.items = [{ purchaseItemId, itemId, quantity, serials }]
         // 1 barcode per receive batch (not per unit)

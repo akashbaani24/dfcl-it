@@ -4,26 +4,34 @@ import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { list } from '@/lib/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { list, action, invalidateCache } from '@/lib/api'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
-import { Eye, Pencil, AlertTriangle } from 'lucide-react'
-import { useApp } from '@/lib/store'
+import { toast } from 'sonner'
+import { Eye, CheckCircle2, Undo2 } from 'lucide-react'
 
-export function PurchasesPage() {
-  const perm = usePerm('purchases')
-  const { setActive } = useApp()
+export function PurchaseApprovalPage() {
+  const perm = usePerm('purchase-approvals')
   const [rows, setRows] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<any>(null)
+  const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { setRows(await list('purchases') as any[]) }
-    finally { setLoading(false) }
+    try {
+      // Only purchases awaiting approval are shown here.
+      const all = await list('purchases', { status: 'SUBMITTED' }) as any[]
+      setRows(all)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load')
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -36,55 +44,75 @@ export function PurchasesPage() {
     setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
   }, [q, rows])
 
-  const startNew = () => {
-    // Navigate to full-page purchase entry form
-    sessionStorage.removeItem('editingPurchaseId')
-    setActive('purchase-entry')
+  const approve = async (id: string) => {
+    if (!confirm('Approve this purchase? You can then receive stock via Purchase Receive.')) return
+    setBusy(true)
+    try {
+      await action('approve-purchase', id)
+      // Bust the cached list so a re-load reflects the new status
+      invalidateCache('purchases')
+      toast.success('Purchase approved. Use Purchase Receive to receive stock.')
+      setViewing(null)
+      load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to approve')
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const startEdit = (row: any) => {
-    sessionStorage.setItem('editingPurchaseId', row.id)
-    setActive('purchase-entry')
+  const sendBack = async (id: string) => {
+    if (!confirm('Send this purchase back for editing?')) return
+    setBusy(true)
+    try {
+      await action('send-back-purchase', id)
+      invalidateCache('purchases')
+      toast.success('Purchase sent back for editing')
+      setViewing(null)
+      load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to send back')
+    } finally {
+      setBusy(false)
+    }
   }
+
+  const canApprove = perm.canUpdate
 
   return (
     <div>
       <PageHeader
-        title="Purchase"
-        description="Create purchase orders, view submitted purchases, and edit ones sent back for revision."
-        onAdd={perm.canCreate ? startNew : undefined}
-        addLabel="New Purchase"
+        title="Purchase Approval"
+        description="Review submitted purchases. Approve to release for stock receipt, or send back for editing."
       />
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="Search purchases..." />
+        <SearchInput value={q} onChange={setQ} placeholder="Search submitted purchases..." />
         <ExportButtons
-          module="purchases"
-          title="Purchase Orders"
+          module="purchase-approvals"
+          title="Purchase Approval Queue"
           rows={rows.map((r) => ({
-          purchaseNo: r.purchaseNo,
-          date: new Date(r.purchaseDate).toLocaleDateString(),
-          entity: r.entity?.name,
-          supplier: r.supplier?.name,
-          invoice: r.invoiceNo,
-          total: r.totalAmount,
-          status: r.status,
-        }))}
-        columns={[
-          { key: 'purchaseNo', label: 'PO No' },
-          { key: 'date', label: 'Date' },
-          { key: 'entity', label: 'Entity' },
-          { key: 'supplier', label: 'Supplier' },
-          { key: 'invoice', label: 'Invoice' },
-          { key: 'total', label: 'Total' },
-          { key: 'status', label: 'Status' },
-        ]}
+            purchaseNo: r.purchaseNo,
+            date: new Date(r.purchaseDate).toLocaleDateString(),
+            entity: r.entity?.name,
+            supplier: r.supplier?.name,
+            total: r.totalAmount,
+            status: r.status,
+          }))}
+          columns={[
+            { key: 'purchaseNo', label: 'PO No' },
+            { key: 'date', label: 'Date' },
+            { key: 'entity', label: 'Entity' },
+            { key: 'supplier', label: 'Supplier' },
+            { key: 'total', label: 'Total' },
+            { key: 'status', label: 'Status' },
+          ]}
         />
       </div>
 
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
       ) : filtered.length === 0 ? (
-        <EmptyState title="No purchases yet" hint="Create one to start" />
+        <EmptyState title="No purchases awaiting approval" hint="Submitted purchases will appear here." />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -96,7 +124,6 @@ export function PurchasesPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Entity</TableHead>
                     <TableHead>Supplier</TableHead>
-                    <TableHead>Invoice</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -105,31 +132,46 @@ export function PurchasesPage() {
                 <TableBody>
                   {filtered.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-mono text-sm">{r.purchaseNo}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="font-mono text-sm text-primary underline-offset-2 hover:underline"
+                          onClick={() => setViewing(r)}
+                          title="View details"
+                        >
+                          {r.purchaseNo}
+                        </button>
+                      </TableCell>
                       <TableCell>{new Date(r.purchaseDate).toLocaleDateString()}</TableCell>
                       <TableCell>{r.entity?.name}</TableCell>
                       <TableCell>{r.supplier?.name}</TableCell>
-                      <TableCell>{r.invoiceNo || '—'}</TableCell>
                       <TableCell>{r.totalAmount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Badge status={r.status} />
-                          {r.status === 'SENT_BACK' && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-700">
-                              <AlertTriangle className="h-3 w-3" />
-                              Sent back for edit
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+                      <TableCell><Badge status={r.status} /></TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewing(r)} title="View details">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {perm.canEdit && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)} title="Edit">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                        {canApprove && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-emerald-600"
+                              onClick={() => approve(r.id)}
+                              title="Approve"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-orange-600"
+                              onClick={() => sendBack(r.id)}
+                              title="Send for edit"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         )}
                       </TableCell>
                     </TableRow>
@@ -147,20 +189,13 @@ export function PurchasesPage() {
             <DialogTitle>Purchase {viewing?.purchaseNo}</DialogTitle>
             <DialogDescription>Status: {viewing?.status}</DialogDescription>
           </DialogHeader>
-          {viewing?.status === 'SENT_BACK' && (
-            <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-800">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Sent back for edit.</span>
-              <span className="text-orange-700">Click Edit to revise and re-submit this purchase.</span>
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><span className="text-muted-foreground">Entity:</span> {viewing?.entity?.name}</div>
             <div><span className="text-muted-foreground">Supplier:</span> {viewing?.supplier?.name}</div>
             <div><span className="text-muted-foreground">Invoice:</span> {viewing?.invoiceNo || '—'}</div>
             <div><span className="text-muted-foreground">Date:</span> {viewing?.purchaseDate && new Date(viewing.purchaseDate).toLocaleDateString()}</div>
             <div><span className="text-muted-foreground">Total:</span> ৳{viewing?.totalAmount?.toFixed(2)}</div>
-            <div><span className="text-muted-foreground">Approved By:</span> {viewing?.approvedBy || '—'}</div>
+            <div><span className="text-muted-foreground">Created By:</span> {viewing?.createdBy || '—'}</div>
           </div>
           <div className="border rounded-md mt-3 overflow-x-auto">
             <Table>
@@ -186,13 +221,25 @@ export function PurchasesPage() {
               </TableBody>
             </Table>
           </div>
-          {perm.canEdit && (
-            <div className="flex justify-end gap-2 mt-2">
+          {canApprove && (
+            <DialogFooter>
               <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
-              <Button onClick={() => { const v = viewing; setViewing(null); startEdit(v) }}>
-                <Pencil className="h-4 w-4 mr-1" /> Edit
+              <Button
+                variant="outline"
+                className="text-orange-700 border-orange-300 hover:bg-orange-50"
+                onClick={() => sendBack(viewing.id)}
+                disabled={busy}
+              >
+                <Undo2 className="h-4 w-4 mr-1" /> Send for Edit
               </Button>
-            </div>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => approve(viewing.id)}
+                disabled={busy}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+              </Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>

@@ -392,7 +392,7 @@ model Purchase {
   purchaseDate    DateTime @default(now())
   invoiceNo       String?
   totalAmount     Float    @default(0)
-  status          String   @default("PENDING") // PENDING, APPROVED, RECEIVED, RETURNED
+  status          String   @default("PENDING") // PENDING, SUBMITTED, APPROVED, SENT_BACK, RECEIVED, PARTIAL_RECEIVED, RETURNED
   approvedBy      String?
   approvedAt      DateTime?
   createdBy       String?
