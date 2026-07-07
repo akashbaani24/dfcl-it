@@ -6,7 +6,7 @@
 // DELETE /api/resource?slug=entities&id=xxx             -> delete
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { RESOURCES, generateNumber, buildWhere } from '@/lib/resources'
+import { RESOURCES, generateNumber, buildWhere, sanitizePayload } from '@/lib/resources'
 import { getCurrentUser, getUserEntityIds } from '@/lib/auth-server'
 import {
   deleteEntityCascade, deleteEmployeeCascade, deleteDepartmentCascade,
@@ -162,7 +162,12 @@ export async function POST(req: NextRequest) {
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]
   try {
-    const payload = { ...data }
+    // Sanitize the payload: convert empty strings on FK-like fields to
+    // undefined so SQLite doesn't throw "FOREIGN KEY constraint failed"
+    // (which gives a confusing generic error). `undefined` makes Prisma
+    // skip the field, which is the correct behavior for nullable columns
+    // and produces a clearer "missing required field" error otherwise.
+    const payload = sanitizePayload({ ...data })
     if (cfg.autoNumberField && cfg.autoNumberPrefix && !payload[cfg.autoNumberField]) {
       payload[cfg.autoNumberField] = await generateNumber(cfg.autoNumberPrefix)
     }
@@ -186,7 +191,9 @@ export async function PATCH(req: NextRequest) {
   // @ts-expect-error dynamic model access
   const model = db[cfg.model]
   try {
-    const row = await model.update({ where: { id }, data, include: cfg.include })
+    // Same sanitization as POST: empty strings on FK fields → undefined.
+    const sanitizedData = sanitizePayload({ ...data })
+    const row = await model.update({ where: { id }, data: sanitizedData, include: cfg.include })
     return NextResponse.json(row)
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

@@ -238,3 +238,66 @@ export function buildWhere(query: Record<string, any>): any {
   }
   return where
 }
+
+/**
+ * Recursively sanitize a Prisma payload by converting empty strings (`''`)
+ * to `undefined` for any field that looks like a foreign key.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * SQLite (with `PRAGMA foreign_keys = ON`) rejects INSERTs/UPDATEs where a
+ * foreign-key column is set to an empty string `''` because no parent row
+ * has `id = ''`. Prisma passes `''` through verbatim, so the database throws
+ * `SQLITE_CONSTRAINT: FOREIGN KEY constraint failed` — a confusing error
+ * because it doesn't tell you which column is the problem.
+ *
+ * The ComboBox component sometimes sets values to `''` when a user toggles
+ * a selection off. If that empty value reaches Prisma, the write fails.
+ *
+ * This helper walks the payload (including nested `items.create` / `items.update`
+ * arrays used by Purchase / Sales / Transfer etc.) and converts `''` to
+ * `undefined` for any field whose name ends in `Id` (or `entityId`,
+ * `shippingEntityId`, `supplierId`, `itemId`, `parentId`, etc.). `undefined`
+ * tells Prisma "skip this field" — the column will either be left at its DB
+ * default (for nullable columns) or Prisma will throw a clearer "missing
+ * required field" error for non-nullable columns, which is much easier to
+ * diagnose than the generic FK constraint failure.
+ *
+ * This is a defensive backstop. Client-side validation should still catch
+ * missing required FK fields first — but if it ever slips through, the API
+ * will fail gracefully instead of corrupting the database.
+ */
+export function sanitizePayload<T extends Record<string, any>>(payload: T): T {
+  if (!payload || typeof payload !== 'object') return payload
+  const out: Record<string, any> = Array.isArray(payload) ? [] : {}
+
+  for (const [key, value] of Object.entries(payload)) {
+    // Empty string on an FK-looking field → undefined
+    if (value === '' && isFkLike(key)) {
+      out[key] = undefined
+      continue
+    }
+    // Recurse into plain objects (e.g. nested create/update wrappers)
+    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      out[key] = sanitizePayload(value)
+      continue
+    }
+    // Recurse into arrays of objects (e.g. items: { create: [{...}, {...}] })
+    if (Array.isArray(value)) {
+      out[key] = value.map((item) =>
+        item && typeof item === 'object' && !(item instanceof Date) ? sanitizePayload(item) : item
+      )
+      continue
+    }
+    out[key] = value
+  }
+  return out as T
+}
+
+function isFkLike(fieldName: string): boolean {
+  // Match any field ending in "Id" (case-sensitive) — covers entityId,
+  // shippingEntityId, supplierId, itemId, categoryId, purchaseId,
+  // fromEntityId, toEntityId, saleId, returnId, refundId, transferId,
+  // receiveId, parentId, departmentId, employeeId, userId, etc.
+  return /Id$/.test(fieldName)
+}
