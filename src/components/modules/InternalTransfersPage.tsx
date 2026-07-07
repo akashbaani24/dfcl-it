@@ -1,33 +1,25 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useApp } from '@/lib/store'
 import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { ComboBox } from '@/components/ui/combobox'
-import { list, create, action } from '@/lib/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { list, action } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, CheckCircle2 } from 'lucide-react'
-import { LineItemEditor, LineItem } from '@/components/shared/LineItemEditor'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
 
 export function InternalTransfersPage() {
   const perm = usePerm('internal-transfers')
+  const { setActive } = useApp()
   const [rows, setRows] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
-  const [entities, setEntities] = useState<any[]>([])
-  const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
   const [viewing, setViewing] = useState<any>(null)
-  const [form, setForm] = useState({ fromEntityId: '', toEntityId: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })
-  const [lines, setLines] = useState<LineItem[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -37,8 +29,6 @@ export function InternalTransfersPage() {
 
   useEffect(() => {
     load()
-    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
-    list('items').then((r) => setItems(r as any[])).catch(() => {})
   }, [load])
 
   useEffect(() => {
@@ -48,28 +38,7 @@ export function InternalTransfersPage() {
   }, [q, rows])
 
   const startNew = () => {
-    setForm({ fromEntityId: '', toEntityId: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })
-    setLines([])
-    setOpen(true)
-  }
-
-  const save = async () => {
-    if (!form.fromEntityId || !form.toEntityId) { toast.error('Select source & destination'); return }
-    if (form.fromEntityId === form.toEntityId) { toast.error('Source and destination must be different'); return }
-    if (lines.length === 0) { toast.error('Add items'); return }
-    try {
-      const r = await create('internal-transfers', {
-        fromEntityId: form.fromEntityId,
-        toEntityId: form.toEntityId,
-        transferDate: new Date(form.transferDate),
-        notes: form.notes,
-        status: 'PENDING',
-        items: { create: lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity, serials: l.serials || null })) },
-      })
-      toast.success(`Created ${r.transferNo}`)
-      setOpen(false)
-      load()
-    } catch (e: any) { toast.error(e.message) }
+    setActive('internal-transfer-entry')
   }
 
   const receive = async (id: string) => {
@@ -150,57 +119,6 @@ export function InternalTransfersPage() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Internal Transfer</DialogTitle>
-            <DialogDescription>For serial-tracked items, enter serial numbers being transferred.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">From Entity</Label>
-              <div className="mt-1">
-                <ComboBox
-                  value={form.fromEntityId || ''}
-                  onChange={(v) => setForm({ ...form, fromEntityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
-                  placeholder="Source"
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">To Entity</Label>
-              <div className="mt-1">
-                <ComboBox
-                  value={form.toEntityId || ''}
-                  onChange={(v) => setForm({ ...form, toEntityId: v })}
-                  options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
-                  placeholder="Destination"
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">Transfer Date</Label>
-              <Input type="date" value={form.transferDate} onChange={(e) => setForm({ ...form, transferDate: e.target.value })} className="mt-1" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="text-xs">Notes</Label>
-              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} />
-            </div>
-          </div>
-          <div className="mt-3">
-            <Label className="text-xs">Items</Label>
-            <div className="mt-1">
-              <LineItemEditor items={items} value={lines} onChange={setLines} showPrice={false} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save}>Create Transfer</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
