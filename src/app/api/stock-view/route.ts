@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     balanceMap[b.itemId] = b._sum.quantity || 0
   }
 
-  // Single query for all serials in stock (only if needed)
+  // Single query for ALL serials in stock (includes BC- prefixed barcodes from receive)
   let serialsMap: Record<string, any[]> = {}
   if (includeSerials) {
     const sWhere: any = { status: 'IN_STOCK' }
@@ -70,12 +70,19 @@ export async function GET(req: NextRequest) {
   }
 
   // Assemble result in memory (no DB calls)
-  const result = items.map((item) => ({
-    item,
-    balance: balanceMap[item.id] || 0,
-    serials: includeSerials && item.hasSerial ? (serialsMap[item.id] || []) : [],
-    perEntity: all && includeSerials && !item.hasSerial ? (perEntityMap[item.id] || []) : [],
-  }))
+  // Show ALL serials (including BC- barcodes from receive) regardless of hasSerial flag
+  const result = items.map((item) => {
+    const itemSerials = includeSerials ? (serialsMap[item.id] || []) : []
+    const hasBarcodeSerials = itemSerials.length > 0
+    return {
+      item,
+      balance: balanceMap[item.id] || 0,
+      // Always include serials if they exist — even for non-serial items (BC- barcodes)
+      serials: includeSerials ? itemSerials : [],
+      // perEntity only for items that have NO serials at all
+      perEntity: all && includeSerials && !hasBarcodeSerials ? (perEntityMap[item.id] || []) : [],
+    }
+  })
 
   return NextResponse.json(result)
 }

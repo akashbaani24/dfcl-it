@@ -44,18 +44,19 @@ function buildRows(
     const itemBarcode = item.barcode || '—'
 
     // Serial-tracked items: one row per IN_STOCK serial
-    if (item.hasSerial) {
-      const serials: any[] = r.serials || []
-      if (serials.length === 0) continue
-      for (const s of serials) {
+    const inStockSerials = (r.serials || []).filter((s: any) => s.status === "IN_STOCK")
+    if (inStockSerials.length > 0) {
+      
+      
+      for (const s of inStockSerials) {
         if (s.status && s.status !== 'IN_STOCK') continue
         rows.push({
           key: `serial-${s.id}`,
           itemId: item.id,
           itemName: item.name,
           itemCode: item.itemCode || '',
-          barcode: s.barcode || itemBarcode,
-          serialNumber: s.serialNumber || '—',
+          barcode: s.barcode || (s.serialNumber?.startsWith('BC-') ? s.serialNumber.replace('BC-', '') : itemBarcode),
+          serialNumber: s.serialNumber?.startsWith('BC-') ? '—' : (s.serialNumber || '—'),
           entityName: s.entity?.name || '—',
           entityShortCode: s.entity?.shortCode || '—',
           qty: 1,
