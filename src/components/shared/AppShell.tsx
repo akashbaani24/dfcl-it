@@ -67,6 +67,27 @@ export function AppShell() {
       .finally(() => setLoading(false))
   }, [setAuth, setLoading])
 
+  // Hash-based routing — if URL has #module, open that module (for new tab)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hash = window.location.hash.substring(1) // remove #
+      // Reverse lookup: hash → module key
+      const validModules = [
+        'dashboard', 'entities', 'departments', 'employees', 'uoms', 'suppliers',
+        'categories', 'items', 'item-serials', 'news-ticker', 'login-settings',
+        'account-types', 'bank-infos', 'purchase-requisitions', 'purchases',
+        'purchase-returns', 'purchase-receive', 'stock-all', 'stock-mine',
+        'internal-transfers', 'internal-receive', 'adjustments', 'sales',
+        'sales-delivery', 'sales-returns', 'sales-refunds', 'accounts-expenses',
+        'accounts-receive', 'reports-stock', 'reports-purchase', 'reports-sales',
+        'reports-accounts', 'reports-serial', 'manage-permissions',
+      ]
+      if (validModules.includes(hash)) {
+        setActive(hash as any)
+      }
+    }
+  }, [setActive])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
