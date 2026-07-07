@@ -93,6 +93,7 @@ export const SECTIONS: Section[] = [
   },
   {
     title: 'Tools',
+    icon: Printer,
     items: [
       { key: 'barcode-print', label: 'Barcode Print', icon: Printer },
     ],
