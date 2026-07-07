@@ -431,16 +431,28 @@ export async function POST(req: NextRequest) {
         const { generateNumber: genPurchaseReceiveNo } = await import('@/lib/resources')
         const receiveNo = await genPurchaseReceiveNo('PRV', 'PURCHASE_RECEIVE')
 
-        // Build line items: 1 barcode per batch + optional serials
+        // Build line items: 1 barcode PER UNIT (not per batch).
+        // If quantity = 10, generate 10 unique barcodes.
+        // If serials are provided (comma-separated), use those as-is.
+        // If no serials, generate BC-<barcode> placeholder serials so each
+        // unit is individually trackable in the ItemSerial table.
         const lineItems = itemsPayload
           .filter((it: any) => it.quantity > 0)
-          .map((it: any) => ({
-            purchaseItemId: it.purchaseItemId,
-            itemId: it.itemId,
-            quantity: it.quantity,
-            barcodes: generateBarcode(),  // 1 barcode per receive batch
-            serials: it.serials || null,
-          }))
+          .map((it: any) => {
+            const qty = Math.floor(it.quantity) || 1
+            // Generate 1 unique barcode per unit
+            const barcodes: string[] = []
+            for (let i = 0; i < qty; i++) {
+              barcodes.push(generateBarcode())
+            }
+            return {
+              purchaseItemId: it.purchaseItemId,
+              itemId: it.itemId,
+              quantity: it.quantity,
+              barcodes: barcodes.join(','),  // comma-separated, 1 per unit
+              serials: it.serials || null,
+            }
+          })
 
         if (lineItems.length === 0) {
           return NextResponse.json({ error: 'No items to receive' }, { status: 400 })
@@ -481,14 +493,26 @@ export async function POST(req: NextRequest) {
         }
 
         for (const it of receive.items) {
-          // 1 barcode per batch
-          const barcode = it.barcodes || generateBarcode()
-          // Serials from product body (optional, may be 0, 1, or many — no qty connection)
+          // barcodes is now a comma-separated string of N barcodes (1 per unit).
+          // Split into individual barcodes so each ItemSerial gets its own.
+          const barcodes: string[] = it.barcodes
+            ? it.barcodes.split(',').map((b: string) => b.trim()).filter(Boolean)
+            : []
+          // If no barcodes stored (legacy data), generate them on the fly
+          while (barcodes.length < it.quantity) {
+            barcodes.push(generateBarcode())
+          }
+          // Serials from product body (optional, may be 0, 1, or many)
           const serials: string[] = it.serials ? it.serials.split(',').map((s) => s.trim()).filter(Boolean) : []
 
           if (serials.length > 0) {
-            // Create ItemSerial for each user-provided serial
-            for (const sn of serials) {
+            // Create ItemSerial for each user-provided serial.
+            // Assign barcodes round-robin: if 10 serials and 10 barcodes,
+            // each serial gets its own barcode. If serials > barcodes,
+            // barcodes cycle.
+            for (let i = 0; i < serials.length; i++) {
+              const sn = serials[i]
+              const bc = barcodes[i] || barcodes[0] || generateBarcode()
               const existing = await db.itemSerial.findUnique({
                 where: { itemId_serialNumber: { itemId: it.itemId, serialNumber: sn } },
               })
@@ -497,7 +521,7 @@ export async function POST(req: NextRequest) {
                   data: {
                     itemId: it.itemId,
                     serialNumber: sn,
-                    barcode,
+                    barcode: bc,
                     entityId: receive.entityId,
                     status: 'IN_STOCK',
                     purchaseId: receive.purchaseId,
@@ -506,22 +530,25 @@ export async function POST(req: NextRequest) {
               }
             }
           } else {
-            // No serials — create 1 ItemSerial with barcode as identifier
-            const serialNumber = `BC-${barcode}`
-            const existing = await db.itemSerial.findUnique({
-              where: { itemId_serialNumber: { itemId: it.itemId, serialNumber } },
-            })
-            if (!existing) {
-              await db.itemSerial.create({
-                data: {
-                  itemId: it.itemId,
-                  serialNumber,
-                  barcode,
-                  entityId: receive.entityId,
-                  status: 'IN_STOCK',
-                  purchaseId: receive.purchaseId,
-                },
+            // No serials — create 1 ItemSerial per barcode, using BC-<barcode>
+            // as the serial number so each unit is individually trackable.
+            for (const bc of barcodes) {
+              const serialNumber = `BC-${bc}`
+              const existing = await db.itemSerial.findUnique({
+                where: { itemId_serialNumber: { itemId: it.itemId, serialNumber } },
               })
+              if (!existing) {
+                await db.itemSerial.create({
+                  data: {
+                    itemId: it.itemId,
+                    serialNumber,
+                    barcode: bc,
+                    entityId: receive.entityId,
+                    status: 'IN_STOCK',
+                    purchaseId: receive.purchaseId,
+                  },
+                })
+              }
             }
           }
 
