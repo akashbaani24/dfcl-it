@@ -321,30 +321,67 @@ export function BarcodePrintPage() {
  * is sufficient.
  */
 function PrintPreview({ items, onClose }: { items: SearchResult[]; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto print:relative print:overflow-visible">
-      {/* Toolbar */}
-      <div className="sticky top-0 bg-white border-b px-4 py-2 flex items-center justify-between print:hidden">
-        <h2 className="text-sm font-semibold">Barcode Print Preview — {items.length} label(s)</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1">
-            <Printer className="h-4 w-4" /> Print
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+  // When print preview is open, add a class to <body> so we can hide
+  // everything else during printing. Remove it when closing.
+  useEffect(() => {
+    document.body.classList.add('barcode-print-active')
+    return () => {
+      document.body.classList.remove('barcode-print-active')
+    }
+  }, [])
 
-      {/* Barcode labels grid */}
-      <div className="p-6 print:p-0">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 print:grid-cols-3">
-          {items.map((item, i) => (
-            <BarcodeLabel key={i} item={item} />
-          ))}
+  return (
+    <>
+      {/* Inline print styles — hide everything except the print preview */}
+      <style jsx global>{`
+        @media print {
+          /* Hide ALL body children by default */
+          body * {
+            visibility: hidden;
+          }
+          /* Show only the print preview and its children */
+          .barcode-print-preview,
+          .barcode-print-preview * {
+            visibility: visible;
+          }
+          /* Position the print preview at the top of the page */
+          .barcode-print-preview {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          /* Remove fixed positioning for print */
+          .barcode-print-preview {
+            position: absolute !important;
+          }
+        }
+      `}</style>
+
+      <div className="barcode-print-preview fixed inset-0 z-50 bg-white overflow-y-auto">
+        {/* Toolbar — hidden when printing */}
+        <div className="sticky top-0 bg-white border-b px-4 py-2 flex items-center justify-between print:hidden">
+          <h2 className="text-sm font-semibold">Barcode Print Preview — {items.length} label(s)</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1">
+              <Printer className="h-4 w-4" /> Print
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Barcode labels grid */}
+        <div className="p-6 print:p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 print:grid-cols-3">
+            {items.map((item, i) => (
+              <BarcodeLabel key={i} item={item} />
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
