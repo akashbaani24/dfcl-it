@@ -194,7 +194,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Top bar */}
-      <header className="h-14 border-b flex items-center gap-2 px-3 sm:px-4 bg-card">
+      <header className="h-14 border-b flex items-center gap-2 px-3 sm:px-4 bg-card sticky top-0 z-40">
         <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
           <Menu className="h-5 w-5" />
         </Button>
