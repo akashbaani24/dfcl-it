@@ -211,6 +211,8 @@ export async function POST(req: NextRequest) {
     // tell you which column is the problem, so this log is critical.
     console.error('[resource POST] create failed for slug=', slug)
     console.error('[resource POST] error:', e.message)
+    console.error('[resource POST] error code:', e.code)
+    console.error('[resource POST] error meta:', JSON.stringify(e.meta))
     try {
       const safeLog = { ...data }
       if (safeLog.items) safeLog.items = `[${Array.isArray(data.items?.create) ? data.items.create.length : 0} items]`
@@ -219,21 +221,112 @@ export async function POST(req: NextRequest) {
       // Log each FK field's value for debugging
       const fkFields = Object.keys(data || {}).filter(k => /Id$/.test(k) || k === 'refId')
       console.error('[resource POST] FK fields in payload:', fkFields.map(k => `${k}=${data[k] || 'undefined'}`).join(', '))
+      // Log line item itemIds
+      if (data?.items?.create) {
+        console.error('[resource POST] line item itemIds:', data.items.create.map((it: any, i: number) => `[${i}] itemId=${it.itemId || 'MISSING'}`).join(', '))
+      }
     } catch {}
 
     // If this is STILL a FK constraint error (pre-flight missed something),
-    // give the user a clear, actionable message instead of the raw Prisma dump.
+    // do a POST-FAILURE diagnostic: re-check ALL FK fields and report
+    // exactly which one is invalid. This gives the user a clear, actionable
+    // message instead of the generic "FOREIGN KEY constraint failed".
     const msg = e.message || ''
-    if (msg.includes('FOREIGN KEY constraint') || msg.includes('foreign key constraint') || msg.includes('ForeignKeyConstraint')) {
+    if (msg.includes('FOREIGN KEY constraint') || msg.includes('foreign key constraint') || msg.includes('ForeignKeyConstraint') || e.code === 'P2003') {
+      // Re-check all FK references to find the culprit
+      const diagnostic = await diagnoseFkFailure(slug, payload)
+      console.error('[resource POST] post-failure diagnostic:', JSON.stringify(diagnostic))
+
+      if (diagnostic.invalid.length > 0) {
+        // Found the invalid FK(s) — report them clearly
+        const details = diagnostic.invalid.map((d) => `${d.field}="${d.id}" does not exist in ${d.model}`).join('; ')
+        return NextResponse.json({
+          error: `রেফারেন্স ভুল: ${details}। অনুগ্রহ করে পেজ রিফ্রেশ করে আবার চেষ্টা করুন। (Reference error: ${details}. Please refresh and reselect.)`,
+          slug,
+          diagnostic,
+        }, { status: 400 })
+      }
+
+      // All FKs are valid but create still failed — this might be a schema
+      // issue (e.g. the shippingEntityId column was added without REFERENCES
+      // but Prisma is checking it). Suggest running migration.
       return NextResponse.json({
-        error: 'একটি রেফারেন্স ভুল হয়েছে। অনুগ্রহ করে পেজ রিফ্রেশ করে আবার চেষ্টা করুন — Entity, Supplier, এবং Item সঠিকভাবে নির্বাচন করুন। (A referenced record does not exist. Please refresh the page and reselect Entity/Supplier/Item.)',
+        error: 'সব রেফারেন্স সঠিক কিন্তু তবুও ত্রুটি হচ্ছে। এটি ডাটাবেস স্কিমার সমস্যা হতে পারে। অনুগ্রহ করে /api/migrate ভিজিট করুন অথবা পেজ রিফ্রেশ করে আবার চেষ্টা করুন। (All references are valid but create still failed. This may be a database schema issue. Visit /api/migrate or refresh and retry.)',
         slug,
-        hint: 'Check server logs for which FK field is invalid',
+        diagnostic,
+        fkValues: diagnostic.checked.map((d) => ({ field: d.field, id: d.id, exists: d.exists })),
+        hint: 'If this persists, visit /api/migrate to ensure the database schema is up to date.',
       }, { status: 400 })
     }
 
     return NextResponse.json({ error: e.message, slug, hint: 'Check server logs for which FK field is invalid' }, { status: 500 })
   }
+}
+
+/**
+ * Post-failure diagnostic: after a FK constraint error, re-check ALL FK
+ * references in the payload and report which ones are valid/invalid.
+ *
+ * This is called when the pre-flight validation passed (all FKs were valid)
+ * but the Prisma create still threw a FK error. This can happen due to:
+ *   - Race conditions (record deleted between pre-flight and create)
+ *   - Schema mismatches (column added without FK constraint)
+ *   - Prisma internal behavior we don't fully understand
+ *
+ * Returns an object with:
+ *   - checked: all FK fields that were checked, with their existence status
+ *   - invalid: only the invalid ones (empty if all are valid)
+ */
+async function diagnoseFkFailure(slug: string, payload: any): Promise<{
+  checked: Array<{ field: string; id: string; model: string; context: string; exists: boolean }>
+  invalid: Array<{ field: string; id: string; model: string; context: string }>
+}> {
+  const checked: Array<{ field: string; id: string; model: string; context: string; exists: boolean }> = []
+  const invalid: Array<{ field: string; id: string; model: string; context: string }> = []
+
+  function collect(obj: any, context: string) {
+    if (!obj || typeof obj !== 'object') return
+    if (Array.isArray(obj)) {
+      obj.forEach((item, i) => collect(item, `${context}[${i}]`))
+      return
+    }
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && value && (/Id$/.test(key) || key === 'refId')) {
+        const modelName = fkFieldToModel(key)
+        if (modelName) {
+          checked.push({ field: key, id: value, model: modelName, context, exists: false })
+        }
+      } else if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        collect(value, `${context}.${key}`)
+      } else if (Array.isArray(value)) {
+        collect(value, `${context}.${key}`)
+      }
+    }
+  }
+
+  collect(payload, slug)
+
+  // Check each reference
+  for (const ref of checked) {
+    try {
+      // @ts-expect-error dynamic model access
+      const m = db[ref.model]
+      if (!m || !m.findUnique) {
+        ref.exists = true // can't check, assume valid
+        continue
+      }
+      const row = await m.findUnique({ where: { id: ref.id }, select: { id: true } })
+      ref.exists = !!row
+      if (!row) {
+        invalid.push({ field: ref.field, id: ref.id, model: ref.model, context: ref.context })
+      }
+    } catch (e: any) {
+      console.error('[diagnoseFkFailure] error checking', ref, e.message)
+      ref.exists = true // can't check, assume valid
+    }
+  }
+
+  return { checked, invalid }
 }
 
 /**
