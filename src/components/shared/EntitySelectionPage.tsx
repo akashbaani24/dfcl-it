@@ -55,18 +55,18 @@ export function EntitySelectionPage() {
   const selectEntity = (entity: any) => {
     setCurrentEntity(entity.id)
     setSelectedEntity(entity.id, entity.name)
-    sessionStorage.setItem('selectedEntityId', entity.id)
-    sessionStorage.setItem('selectedEntityName', entity.name)
-    sessionStorage.setItem('selectedEntityCode', entity.shortCode)
+    localStorage.setItem('selectedEntityId', entity.id)
+    localStorage.setItem('selectedEntityName', entity.name)
+    localStorage.setItem('selectedEntityCode', entity.shortCode)
     toast.success(`Entered: ${entity.name}`)
     setActive('dashboard')
   }
 
   const handleLogout = async () => {
     await logout()
-    sessionStorage.removeItem('selectedEntityId')
-    sessionStorage.removeItem('selectedEntityName')
-    sessionStorage.removeItem('selectedEntityCode')
+    localStorage.removeItem('selectedEntityId')
+    localStorage.removeItem('selectedEntityName')
+    localStorage.removeItem('selectedEntityCode')
   }
 
   if (loading) {

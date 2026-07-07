@@ -89,7 +89,7 @@ export function StockMinePage() {
   const [data, setData] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [entities, setEntities] = useState<any[]>([])
-  // Pre-select entity from sessionStorage 'selectedEntityId' (set by AppShell on entity selection)
+  // Pre-select entity from localStorage 'selectedEntityId' (set by AppShell on entity selection)
   const [entityId, setEntityId] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
@@ -98,10 +98,10 @@ export function StockMinePage() {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
   }, [])
 
-  // Pre-select entity from sessionStorage on mount (client-only)
+  // Pre-select entity from localStorage on mount (client-only)
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const stored = sessionStorage.getItem('selectedEntityId')
+    const stored = localStorage.getItem('selectedEntityId')
     if (stored && !entityId) setEntityId(stored)
   }, [])
 
