@@ -99,6 +99,35 @@ export async function POST(req: NextRequest) {
         //   - If step 3 fails → specific itemId issue
         const payload = extra || {}
 
+        // IDEMPOTENCY CHECK: if the client sends an _idempotencyKey, we store
+        // it in the purchase's `notes` field (prefixed with "IDEM:"). Before
+        // creating, we check if a purchase with this key already exists — if
+        // so, return that purchase instead of creating a duplicate. This
+        // prevents the "items appearing twice" bug when the user double-clicks
+        // the submit button or the network retries the request.
+        const idempotencyKey = payload._idempotencyKey
+        if (idempotencyKey) {
+          // Check if a purchase with this idempotency key already exists
+          // (we store it in the notes field as "IDEM:<key>")
+          const existing = await db.purchase.findFirst({
+            where: { notes: { contains: `IDEM:${idempotencyKey}` } },
+            include: {
+              entity: { select: { id: true, name: true } },
+              shippingEntity: { select: { id: true, name: true } },
+              supplier: { select: { id: true, name: true } },
+              items: { include: { item: { select: { id: true, name: true, itemCode: true } } } },
+            },
+          })
+          if (existing) {
+            console.log('[create-purchase-safe] Idempotency hit — returning existing purchase', existing.purchaseNo)
+            return NextResponse.json({
+              ...existing,
+              _idempotent: true,
+              _message: 'This purchase was already created (duplicate submission prevented)',
+            })
+          }
+        }
+
         // Generate purchaseNo
         const now = new Date()
         const yy = String(now.getFullYear()).slice(-2)
@@ -106,6 +135,12 @@ export async function POST(req: NextRequest) {
         const dd = String(now.getDate()).padStart(2, '0')
         const ts = Date.now().toString().slice(-6)
         const purchaseNo = `PO-${yy}${mm}${dd}-${ts}`
+
+        // Store the idempotency key in the notes field (if provided) so we
+        // can detect duplicate submissions. We prefix it with "IDEM:" and
+        // append it to the actual notes.
+        const idemTag = idempotencyKey ? `IDEM:${idempotencyKey}` : ''
+        const finalNotes = [payload.notes, idemTag].filter(Boolean).join(' | ') || null
 
         // Step 1: Create Purchase header ONLY — no items, no shippingEntityId
         console.log('[create-purchase-safe] Step 1: creating purchase header only')
@@ -123,7 +158,7 @@ export async function POST(req: NextRequest) {
               approvedBy: null,
               approvedAt: null,
               createdBy: payload.createdBy || null,
-              notes: payload.notes || null,
+              notes: finalNotes,
               // NOTE: deliberately NOT including shippingEntityId or items
               // here — we add them in steps 2 and 3 to isolate failures.
             },

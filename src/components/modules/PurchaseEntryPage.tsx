@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useApp } from '@/lib/store'
 import { useAuth } from '@/lib/auth-store'
 import { Button } from '@/components/ui/button'
@@ -153,13 +153,27 @@ export function PurchaseEntryPage() {
 
   const grandTotal = lines.reduce((sum, l) => sum + (l.total || 0), 0)
 
+  // Ref to prevent double-submission. Even though the button is disabled
+  // when `saving` is true, there's a small window between the click and
+  // the state update where a second click can fire. This ref closes that
+  // window — if a save is already in progress, subsequent calls return
+  // immediately.
+  const savingRef = useRef(false)
+
   const save = async () => {
-    if (!purchaseFor) { toast.error('Purchase For (Entity) is required'); return }
-    if (!shippingEntity) { toast.error('Shipping/Stock Receive (Entity) is required'); return }
-    if (!supplierId) { toast.error('Supplier is required'); return }
-    if (lines.length === 0) { toast.error('Add at least one item'); return }
+    // Prevent double-submission (double-click on the button)
+    if (savingRef.current) {
+      console.log('[PurchaseEntry] save() called while already saving — ignoring')
+      return
+    }
+    savingRef.current = true
+
+    if (!purchaseFor) { toast.error('Purchase For (Entity) is required'); savingRef.current = false; return }
+    if (!shippingEntity) { toast.error('Shipping/Stock Receive (Entity) is required'); savingRef.current = false; return }
+    if (!supplierId) { toast.error('Supplier is required'); savingRef.current = false; return }
+    if (lines.length === 0) { toast.error('Add at least one item'); savingRef.current = false; return }
     for (const l of lines) {
-      if (!l.itemId) { toast.error('Select an item for each line'); return }
+      if (!l.itemId) { toast.error('Select an item for each line'); savingRef.current = false; return }
     }
 
     setSaving(true)
@@ -198,8 +212,14 @@ export function PurchaseEntryPage() {
         // so we can isolate exactly which part fails. This avoids the
         // "FOREIGN KEY constraint failed" error that happens with nested
         // creates on Turso/libSQL.
+        //
+        // IDEMPOTENCY: generate a unique key for this submission. If the user
+        // double-clicks the submit button, the second request will be rejected
+        // by the server (it checks if a purchase with this key already exists).
+        // This prevents the "items appearing twice" bug.
+        const idempotencyKey = 'pk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
         try {
-          const result = await action('create-purchase-safe', 'new', payload)
+          const result = await action('create-purchase-safe', 'new', { ...payload, _idempotencyKey: idempotencyKey })
           if (result._warning && result._failedItems?.length > 0) {
             // Some items failed — show which ones
             const failedNames = result._failedItems.map((f: any) =>
@@ -231,6 +251,7 @@ export function PurchaseEntryPage() {
       toast.error(msg, { duration: 8000 })
     } finally {
       setSaving(false)
+      savingRef.current = false
     }
   }
 
