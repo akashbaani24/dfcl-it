@@ -139,7 +139,11 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     include: {
       fromEntity: { select: { id: true, name: true } },
       toEntity: { select: { id: true, name: true } },
-      items: { select: { id: true, itemId: true, quantity: true } },
+      items: {
+        include: {
+          item: { select: { id: true, name: true, itemCode: true, uom: { select: { shortCode: true } } } },
+        },
+      },
     },
     listSelect: { id: true, transferNo: true, fromEntityId: true, toEntityId: true, transferDate: true, status: true, receivedAt: true, notes: true, createdAt: true },
     writable: true, updatable: true, deletable: true,

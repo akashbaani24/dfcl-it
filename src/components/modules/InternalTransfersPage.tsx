@@ -133,15 +133,48 @@ export function InternalTransfersPage() {
           </div>
           <div className="border rounded-md mt-3 overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Serials</TableHead></TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sl</TableHead>
+                  <TableHead>Item Name</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>UoM</TableHead>
+                  <TableHead>Barcodes / Serials</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
-                {viewing?.items?.map((it: any) => (
-                  <TableRow key={it.id}>
-                    <TableCell>{it.item?.name}</TableCell>
-                    <TableCell>{it.quantity}</TableCell>
-                    <TableCell className="font-mono text-xs">{it.serials || '—'}</TableCell>
+                {viewing?.items?.length > 0 ? (
+                  viewing.items.map((it: any, idx: number) => (
+                    <TableRow key={it.id}>
+                      <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{it.item?.name || '—'}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
+                      </TableCell>
+                      <TableCell className="font-medium">{it.quantity}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{it.item?.uom?.shortCode || '—'}</TableCell>
+                      <TableCell>
+                        {it.serials ? (
+                          <div className="flex flex-wrap gap-1">
+                            {it.serials.split(',').map((s: string, i: number) => (
+                              <span key={i} className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                {s.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
+                      No items in this transfer
+                    </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
