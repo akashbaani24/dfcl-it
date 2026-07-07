@@ -68,11 +68,23 @@ export function AppShell() {
       .finally(() => setLoading(false))
   }, [setAuth, setLoading])
 
-  // Hash-based routing — if URL has #module, open that module (for new tab)
+  // On mount: restore entity from sessionStorage (if present) and process hash routing.
+  // Both steps run in the SAME effect so the entity restore settles BEFORE the hash module
+  // is activated — this is what makes "Open in new tab" from the sidebar land on the target
+  // page instead of the entity selection page.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash) {
+    if (typeof window === 'undefined') return
+
+    // 1) Restore entity from sessionStorage if present (e.g. user opened a link in a new tab)
+    const stored = sessionStorage.getItem('selectedEntityId')
+    const storedName = sessionStorage.getItem('selectedEntityName')
+    if (stored && storedName) {
+      useApp.getState().setSelectedEntity(stored, storedName)
+    }
+
+    // 2) Hash-based routing — if URL has #module, open that module (for new tab)
+    if (window.location.hash) {
       const hash = window.location.hash.substring(1) // remove #
-      // Reverse lookup: hash → module key
       const validModules = [
         'dashboard', 'entities', 'departments', 'employees', 'uoms', 'suppliers',
         'categories', 'items', 'item-serials', 'news-ticker', 'login-settings',
@@ -84,10 +96,13 @@ export function AppShell() {
         'reports-accounts', 'reports-serial', 'manage-permissions',
       ]
       if (validModules.includes(hash)) {
-        setActive(hash as any)
+        // Defer to the next tick so the entity restore above (which triggers a
+        // re-render) settles before we switch the active module. Otherwise the
+        // hash module can be activated while the entity gate is still pending.
+        setTimeout(() => useApp.getState().setActive(hash as any), 0)
       }
     }
-  }, [setActive])
+  }, [])
 
   if (loading) {
     return (
@@ -99,20 +114,14 @@ export function AppShell() {
 
   if (!user) return <LoginPage />
 
-  // After login, if no entity selected → show entity selection page
-  if (!selectedEntityId) {
-    // Try to restore from sessionStorage first
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('selectedEntityId')
-      const storedName = sessionStorage.getItem('selectedEntityName')
-      if (stored && storedName) {
-        useApp.getState().setSelectedEntity(stored, storedName)
-      } else {
-        return <EntitySelectionPage />
-      }
-    } else {
-      return <EntitySelectionPage />
-    }
+  // After login, if no entity in store AND no entity in sessionStorage → show entity
+  // selection page. If sessionStorage has an entity, the mount effect above will restore
+  // it (triggering a re-render), so we deliberately skip the EntitySelectionPage render
+  // on this pass — this is what fixes the "new tab shows entity selection" bug.
+  const hasStoredEntity =
+    typeof window !== 'undefined' && !!sessionStorage.getItem('selectedEntityId')
+  if (!selectedEntityId && !hasStoredEntity) {
+    return <EntitySelectionPage />
   }
 
   const handleLogout = async () => {

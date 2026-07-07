@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
@@ -7,91 +7,237 @@ import { Button } from '@/components/ui/button'
 import { ComboBox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { stockView, list } from '@/lib/api'
-import { ScanLine, Barcode } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Badge } from '@/components/shared/PageHeader'
+import { Barcode, RefreshCw, ScanLine } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
+
+// A flattened display row — one row per (item, entity) for non-serial items,
+// or one row per IN_STOCK serial for serial-tracked items.
+type StockRow = {
+  key: string
+  itemId: string
+  itemName: string
+  itemCode: string
+  barcode: string
+  serialNumber: string
+  entityName: string
+  entityShortCode: string
+  qty: number
+  uom: string
+  isSerial: boolean
+}
+
+// Build display rows from the stockView API response.
+// - When entityId is provided (single entity filter), non-serial items show one row
+//   with that entity and the per-entity balance.
+// - When all=1 (no entity filter), non-serial items show one row per perEntity entry.
+function buildRows(
+  data: any[],
+  entityId: string,
+  selectedEntity?: { name: string; shortCode: string } | null,
+): StockRow[] {
+  const rows: StockRow[] = []
+  for (const r of data) {
+    const item = r.item
+    if (!item) continue
+    const uomShort = item.uom?.shortCode || '—'
+    const itemBarcode = item.barcode || '—'
+
+    // Serial-tracked items: one row per IN_STOCK serial
+    if (item.hasSerial) {
+      const serials: any[] = r.serials || []
+      if (serials.length === 0) continue
+      for (const s of serials) {
+        if (s.status && s.status !== 'IN_STOCK') continue
+        rows.push({
+          key: `serial-${s.id}`,
+          itemId: item.id,
+          itemName: item.name,
+          itemCode: item.itemCode || '',
+          barcode: s.barcode || itemBarcode,
+          serialNumber: s.serialNumber || '—',
+          entityName: s.entity?.name || '—',
+          entityShortCode: s.entity?.shortCode || '—',
+          qty: 1,
+          uom: uomShort,
+          isSerial: true,
+        })
+      }
+      continue
+    }
+
+    // Non-serial items: per-entity breakdown (all mode) or single row (entity filter)
+    if (entityId) {
+      const balance = r.balance || 0
+      if (balance <= 0) continue
+      rows.push({
+        key: `bulk-${item.id}-${entityId}`,
+        itemId: item.id,
+        itemName: item.name,
+        itemCode: item.itemCode || '',
+        barcode: itemBarcode,
+        serialNumber: '—',
+        entityName: selectedEntity?.name || '—',
+        entityShortCode: selectedEntity?.shortCode || '—',
+        qty: balance,
+        uom: uomShort,
+        isSerial: false,
+      })
+    } else {
+      const perEntity: any[] = r.perEntity || []
+      if (perEntity.length > 0) {
+        for (const pe of perEntity) {
+          rows.push({
+            key: `bulk-${item.id}-${pe.entity?.id || 'x'}`,
+            itemId: item.id,
+            itemName: item.name,
+            itemCode: item.itemCode || '',
+            barcode: itemBarcode,
+            serialNumber: '—',
+            entityName: pe.entity?.name || '—',
+            entityShortCode: pe.entity?.shortCode || '—',
+            qty: pe.quantity || 0,
+            uom: uomShort,
+            isSerial: false,
+          })
+        }
+      } else if ((r.balance || 0) > 0) {
+        // Fallback (e.g. legacy cached response without perEntity)
+        rows.push({
+          key: `bulk-${item.id}-total`,
+          itemId: item.id,
+          itemName: item.name,
+          itemCode: item.itemCode || '',
+          barcode: itemBarcode,
+          serialNumber: '—',
+          entityName: '—',
+          entityShortCode: '—',
+          qty: r.balance,
+          uom: uomShort,
+          isSerial: false,
+        })
+      }
+    }
+  }
+  return rows
+}
 
 export function StockAllPage() {
   const perm = usePerm('stock-all')
   const [data, setData] = useState<any[]>([])
   const [q, setQ] = useState('')
-  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [entityId, setEntityId] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [viewing, setViewing] = useState<any>(null)
 
   const load = async () => {
     setLoading(true)
     try {
+      // When no entity is selected → fetch all entities aggregated (with perEntity breakdown)
+      // When an entity is selected → fetch stock filtered to that entity
       const r = await stockView(entityId || undefined, !entityId, true)
       setData(r)
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(() => { list('entities').then((r) => setEntities(r as any[])).catch(() => {}) }, [])
-  useEffect(() => { load() }, [entityId])
 
   useEffect(() => {
-    if (!q) { setFiltered(data); return }
+    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
+  }, [])
+  useEffect(() => {
+    load()
+  }, [entityId])
+
+  const selectedEntity = useMemo(
+    () => entities.find((e) => e.id === entityId) || null,
+    [entities, entityId],
+  )
+
+  const allRows = useMemo(
+    () => buildRows(data, entityId, selectedEntity),
+    [data, entityId, selectedEntity],
+  )
+
+  const filtered = useMemo(() => {
+    if (!q) return allRows
     const ql = q.toLowerCase()
-    setFiltered(data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
-  }, [q, data])
+    return allRows.filter(
+      (r) =>
+        r.itemName.toLowerCase().includes(ql) ||
+        r.itemCode.toLowerCase().includes(ql) ||
+        r.barcode.toLowerCase().includes(ql) ||
+        r.serialNumber.toLowerCase().includes(ql) ||
+        r.entityName.toLowerCase().includes(ql) ||
+        r.entityShortCode.toLowerCase().includes(ql),
+    )
+  }, [q, allRows])
+
+  const exportRows = filtered.map((r, i) => ({
+    sl: i + 1,
+    entity: r.entityShortCode,
+    itemName: r.itemName,
+    barcode: r.barcode,
+    serialNumber: r.serialNumber,
+    qty: r.qty,
+    uom: r.uom,
+  }))
+  const exportColumns = [
+    { key: 'sl', label: 'Sl No' },
+    { key: 'entity', label: 'Entity' },
+    { key: 'itemName', label: 'Item Name' },
+    { key: 'barcode', label: 'Barcode' },
+    { key: 'serialNumber', label: 'Serial Number' },
+    { key: 'qty', label: 'Qty' },
+    { key: 'uom', label: 'UoM' },
+  ]
+
+  if (!perm.canView) {
+    return <EmptyState title="Access denied" hint="You don't have permission to view this page" />
+  }
 
   return (
     <div>
       <PageHeader
         title="All Entity Stock"
-        description="Aggregated stock view across all entities or filter by entity"
+        description="Stock across all entities — each serial on its own row, bulk items grouped per entity"
       />
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="Search stock..." />
-        <ExportButtons
-          module="stock-all"
-          title="Stock Summary"
-          rows={data.filter((r) => r.balance > 0).map((r) => ({
-            itemCode: r.item?.itemCode,
-            barcode: r.item?.barcode,
-            name: r.item?.name,
-            category: r.item?.category?.parent?.name ? r.item.category.parent.name + ' → ' + r.item.category.name : r.item?.category?.name,
-            uom: r.item?.uom?.shortCode,
-            balance: r.balance,
-            serialTracking: r.item?.hasSerial ? 'Yes' : 'No',
-          }))}
-          columns={[
-            { key: 'itemCode', label: 'Item Code' },
-            { key: 'barcode', label: 'Barcode' },
-            { key: 'name', label: 'Item Name' },
-            { key: 'category', label: 'Category' },
-            { key: 'uom', label: 'UoM' },
-            { key: 'balance', label: 'Balance' },
-            { key: 'serialTracking', label: 'Serial Tracking' },
-          ]}
-        />
-      </div>
-      <div className="mb-3 flex items-end gap-3">
-        <div>
-          <Label className="text-xs">Entity</Label>
-          <div className="mt-1 w-64">
-            <ComboBox
-              value={entityId || '__ALL__'}
-              onChange={(v) => setEntityId(v === '__ALL__' ? '' : v)}
-              options={[
-                { value: '__ALL__', label: 'All Entities' },
-                ...entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
-              ]}
-              placeholder="All entities"
-            />
+
+      {/* Top row: Search (left) + Entity filter & exports (right) */}
+      <div className="flex items-end gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search item / barcode / serial / entity..." />
+        <div className="ml-auto flex items-end gap-2">
+          <div>
+            <Label className="text-xs">Entity</Label>
+            <div className="mt-1 w-64">
+              <ComboBox
+                value={entityId || '__ALL__'}
+                onChange={(v) => setEntityId(v === '__ALL__' ? '' : v)}
+                options={[
+                  { value: '__ALL__', label: 'All Entities' },
+                  ...entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
+                ]}
+                placeholder="All entities"
+              />
+            </div>
           </div>
+          <Button onClick={load} variant="outline" size="sm" className="gap-1">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
         </div>
-        <Button onClick={load} variant="outline" size="sm">Refresh</Button>
       </div>
+
+      <ExportButtons
+        module="stock-all"
+        title="All Entity Stock"
+        rows={exportRows}
+        columns={exportColumns}
+      />
 
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : filtered.filter((r) => r.balance > 0).length === 0 ? (
-        <EmptyState title="No stock" hint="No items in stock" />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="No stock" hint="No items in stock for the current filter" />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -99,39 +245,35 @@ export function StockAllPage() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Item Code</TableHead>
-                    <TableHead>Barcode</TableHead>
+                    <TableHead className="w-16">Sl No</TableHead>
+                    <TableHead>Entity</TableHead>
                     <TableHead>Item Name</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Serial Number</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
                     <TableHead>UoM</TableHead>
-                    <TableHead className="text-right">Balance Qty</TableHead>
-                    <TableHead>Serial Tracking</TableHead>
-                    <TableHead className="text-right">View Serials</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.filter((r) => r.balance > 0).map((r) => (
-                    <TableRow key={r.item.id}>
-                      <TableCell className="font-mono text-xs">{r.item.itemCode}</TableCell>
-                      <TableCell className="font-mono text-xs"><Barcode className="h-3 w-3 inline mr-1" />{r.item.barcode}</TableCell>
-                      <TableCell>{r.item.name}</TableCell>
-                      <TableCell>{r.item.category?.parent?.name ? r.item.category.parent.name + ' → ' : ''}{r.item.category?.name}</TableCell>
-                      <TableCell>{r.item.uom?.shortCode}</TableCell>
-                      <TableCell className="text-right font-bold">{r.balance}</TableCell>
+                  {filtered.map((r, idx) => (
+                    <TableRow key={r.key}>
+                      <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell>
-                        {r.item.hasSerial ? (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
-                            <ScanLine className="h-3 w-3" /> Yes ({r.serials?.length || 0} in stock)
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Bulk</span>
-                        )}
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-xs font-medium font-mono">{r.entityShortCode}</span>
+                          <span className="text-[10px] text-muted-foreground">{r.entityName}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {r.item.hasSerial && r.serials?.length > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => setViewing(r)}>View Serials</Button>
-                        )}
+                      <TableCell className="flex items-center gap-1.5">
+                        {r.isSerial && <ScanLine className="h-3 w-3 text-emerald-600 shrink-0" />}
+                        <span>{r.itemName}</span>
                       </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">
+                        <Barcode className="h-3 w-3 inline mr-1" />{r.barcode}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{r.serialNumber}</TableCell>
+                      <TableCell className="text-right font-bold">{r.qty}</TableCell>
+                      <TableCell>{r.uom}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -140,34 +282,6 @@ export function StockAllPage() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Serial Numbers — {viewing?.item?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="border rounded-md overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Serial Number</TableHead>
-                  <TableHead>Currently At</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {viewing?.serials?.map((s: any) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono">{s.serialNumber}</TableCell>
-                    <TableCell>{s.entity?.name}</TableCell>
-                    <TableCell><Badge status={s.status} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -1,28 +1,108 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
+import { useEffect, useMemo, useState } from 'react'
+import { PageHeader, EmptyState } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { ComboBox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { stockView, list } from '@/lib/api'
-import { ScanLine, Barcode, MapPin } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Barcode, MapPin, RefreshCw, ScanLine } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
+
+// A flattened display row — one row per IN_STOCK serial for serial-tracked items,
+// or one row per item (using the selected entity) for bulk items.
+type StockRow = {
+  key: string
+  itemId: string
+  itemName: string
+  itemCode: string
+  barcode: string
+  serialNumber: string
+  entityName: string
+  entityShortCode: string
+  qty: number
+  uom: string
+  isSerial: boolean
+}
+
+function buildRows(
+  data: any[],
+  entityId: string,
+  selectedEntity?: { name: string; shortCode: string } | null,
+): StockRow[] {
+  const rows: StockRow[] = []
+  if (!entityId) return rows
+  for (const r of data) {
+    const item = r.item
+    if (!item) continue
+    const uomShort = item.uom?.shortCode || '—'
+    const itemBarcode = item.barcode || '—'
+
+    // Serial-tracked items: one row per IN_STOCK serial (API already filters by entity)
+    if (item.hasSerial) {
+      const serials: any[] = r.serials || []
+      if (serials.length === 0) continue
+      for (const s of serials) {
+        if (s.status && s.status !== 'IN_STOCK') continue
+        rows.push({
+          key: `serial-${s.id}`,
+          itemId: item.id,
+          itemName: item.name,
+          itemCode: item.itemCode || '',
+          barcode: s.barcode || itemBarcode,
+          serialNumber: s.serialNumber || '—',
+          entityName: s.entity?.name || selectedEntity?.name || '—',
+          entityShortCode: s.entity?.shortCode || selectedEntity?.shortCode || '—',
+          qty: 1,
+          uom: uomShort,
+          isSerial: true,
+        })
+      }
+      continue
+    }
+
+    // Non-serial items: one row with the selected entity and per-entity balance
+    const balance = r.balance || 0
+    if (balance <= 0) continue
+    rows.push({
+      key: `bulk-${item.id}-${entityId}`,
+      itemId: item.id,
+      itemName: item.name,
+      itemCode: item.itemCode || '',
+      barcode: itemBarcode,
+      serialNumber: '—',
+      entityName: selectedEntity?.name || '—',
+      entityShortCode: selectedEntity?.shortCode || '—',
+      qty: balance,
+      uom: uomShort,
+      isSerial: false,
+    })
+  }
+  return rows
+}
 
 export function StockMinePage() {
   const perm = usePerm('stock-mine')
   const [data, setData] = useState<any[]>([])
   const [q, setQ] = useState('')
-  const [filtered, setFiltered] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
+  // Pre-select entity from sessionStorage 'selectedEntityId' (set by AppShell on entity selection)
   const [entityId, setEntityId] = useState<string>('')
-  const [loading, setLoading] = useState(true)
-  const [viewing, setViewing] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => { list('entities').then((r) => setEntities(r as any[])).catch(() => {}) }, [])
+  // Load entity options
+  useEffect(() => {
+    list('entities').then((r) => setEntities(r as any[])).catch(() => {})
+  }, [])
+
+  // Pre-select entity from sessionStorage on mount (client-only)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = sessionStorage.getItem('selectedEntityId')
+    if (stored && !entityId) setEntityId(stored)
+  }, [])
 
   const load = async () => {
     if (!entityId) return
@@ -30,66 +110,107 @@ export function StockMinePage() {
     try {
       const r = await stockView(entityId, false, true)
       setData(r)
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(() => { if (entityId) load() }, [entityId])
 
   useEffect(() => {
-    if (!q) { setFiltered(data); return }
+    if (entityId) load()
+  }, [entityId])
+
+  const selectedEntity = useMemo(
+    () => entities.find((e) => e.id === entityId) || null,
+    [entities, entityId],
+  )
+
+  const allRows = useMemo(
+    () => buildRows(data, entityId, selectedEntity),
+    [data, entityId, selectedEntity],
+  )
+
+  const filtered = useMemo(() => {
+    if (!q) return allRows
     const ql = q.toLowerCase()
-    setFiltered(data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
-  }, [q, data])
+    return allRows.filter(
+      (r) =>
+        r.itemName.toLowerCase().includes(ql) ||
+        r.itemCode.toLowerCase().includes(ql) ||
+        r.barcode.toLowerCase().includes(ql) ||
+        r.serialNumber.toLowerCase().includes(ql) ||
+        r.entityName.toLowerCase().includes(ql) ||
+        r.entityShortCode.toLowerCase().includes(ql),
+    )
+  }, [q, allRows])
+
+  const exportRows = filtered.map((r, i) => ({
+    sl: i + 1,
+    entity: r.entityShortCode,
+    itemName: r.itemName,
+    barcode: r.barcode,
+    serialNumber: r.serialNumber,
+    qty: r.qty,
+    uom: r.uom,
+  }))
+  const exportColumns = [
+    { key: 'sl', label: 'Sl No' },
+    { key: 'entity', label: 'Entity' },
+    { key: 'itemName', label: 'Item Name' },
+    { key: 'barcode', label: 'Barcode' },
+    { key: 'serialNumber', label: 'Serial Number' },
+    { key: 'qty', label: 'Qty' },
+    { key: 'uom', label: 'UoM' },
+  ]
+
+  if (!perm.canView) {
+    return <EmptyState title="Access denied" hint="You don't have permission to view this page" />
+  }
 
   return (
     <div>
       <PageHeader
         title="My Entity Stock"
-        description="Stock currently held by a specific entity (branch/showroom/warehouse)"
+        description="Stock currently held by a specific entity — each serial on its own row"
       />
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <SearchInput value={q} onChange={setQ} placeholder="Search stock..." />
-        <ExportButtons
-          module="stock-mine"
-          title="My Entity Stock"
-          rows={data.filter((r) => r.balance > 0).map((r) => ({
-            itemCode: r.item?.itemCode,
-            barcode: r.item?.barcode,
-            name: r.item?.name,
-            category: r.item?.category?.name,
-            balance: r.balance,
-            serials: r.item?.hasSerial ? (r.serials?.length || 0) : '—',
-          }))}
-          columns={[
-            { key: 'itemCode', label: 'Item Code' },
-            { key: 'barcode', label: 'Barcode' },
-            { key: 'name', label: 'Item Name' },
-            { key: 'category', label: 'Category' },
-            { key: 'balance', label: 'Balance' },
-            { key: 'serials', label: 'Serials In Stock' },
-          ]}
-        />
-      </div>
-      <div className="mb-3 flex items-end gap-3">
-        <div>
-          <Label className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" /> Select Your Entity</Label>
-          <div className="mt-1 w-64">
-            <ComboBox
-              value={entityId || ''}
-              onChange={setEntityId}
-              options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
-              placeholder="Select entity"
-            />
+
+      {/* Top row: Search (left) + Entity picker & exports (right) */}
+      <div className="flex items-end gap-2 mb-3 flex-wrap">
+        <SearchInput value={q} onChange={setQ} placeholder="Search item / barcode / serial..." />
+        <div className="ml-auto flex items-end gap-2">
+          <div>
+            <Label className="text-xs flex items-center gap-1">
+              <MapPin className="h-3 w-3" /> Select Your Entity
+            </Label>
+            <div className="mt-1 w-64">
+              <ComboBox
+                value={entityId || ''}
+                onChange={setEntityId}
+                options={entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode }))}
+                placeholder="Select entity"
+              />
+            </div>
           </div>
+          {entityId && (
+            <Button onClick={load} variant="outline" size="sm" className="gap-1">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          )}
         </div>
-        {entityId && <Button onClick={load} variant="outline" size="sm">Refresh</Button>}
       </div>
+
+      <ExportButtons
+        module="stock-mine"
+        title="My Entity Stock"
+        rows={exportRows}
+        columns={exportColumns}
+      />
 
       {!entityId ? (
         <EmptyState title="Select an entity" hint="Choose your entity to see its stock" />
       ) : loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
-      ) : filtered.filter((r) => r.balance > 0).length === 0 ? (
-        <EmptyState title="No stock at this entity" />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="No stock at this entity" hint="Try a different entity or refresh" />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -97,37 +218,35 @@ export function StockMinePage() {
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
-                    <TableHead>Item Code</TableHead>
-                    <TableHead>Barcode</TableHead>
+                    <TableHead className="w-16">Sl No</TableHead>
+                    <TableHead>Entity</TableHead>
                     <TableHead>Item Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead>Serials In Stock</TableHead>
-                    <TableHead className="text-right">View</TableHead>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Serial Number</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead>UoM</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.filter((r) => r.balance > 0).map((r) => (
-                    <TableRow key={r.item.id}>
-                      <TableCell className="font-mono text-xs">{r.item.itemCode}</TableCell>
-                      <TableCell className="font-mono text-xs"><Barcode className="h-3 w-3 inline mr-1" />{r.item.barcode}</TableCell>
-                      <TableCell>{r.item.name}</TableCell>
-                      <TableCell>{r.item.category?.name}</TableCell>
-                      <TableCell className="text-right font-bold">{r.balance}</TableCell>
+                  {filtered.map((r, idx) => (
+                    <TableRow key={r.key}>
+                      <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell>
-                        {r.item.hasSerial ? (
-                          <span className="text-xs inline-flex items-center gap-1 text-emerald-700">
-                            <ScanLine className="h-3 w-3" /> {r.serials?.length || 0} serial(s)
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-xs font-medium font-mono">{r.entityShortCode}</span>
+                          <span className="text-[10px] text-muted-foreground">{r.entityName}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {r.item.hasSerial && r.serials?.length > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => setViewing(r)}>View</Button>
-                        )}
+                      <TableCell className="flex items-center gap-1.5">
+                        {r.isSerial && <ScanLine className="h-3 w-3 text-emerald-600 shrink-0" />}
+                        <span>{r.itemName}</span>
                       </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">
+                        <Barcode className="h-3 w-3 inline mr-1" />{r.barcode}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{r.serialNumber}</TableCell>
+                      <TableCell className="text-right font-bold">{r.qty}</TableCell>
+                      <TableCell>{r.uom}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -136,32 +255,6 @@ export function StockMinePage() {
           </CardContent>
         </Card>
       )}
-
-      <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Serials — {viewing?.item?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="border rounded-md overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Serial Number</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {viewing?.serials?.map((s: any) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono">{s.serialNumber}</TableCell>
-                    <TableCell><Badge status={s.status} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
