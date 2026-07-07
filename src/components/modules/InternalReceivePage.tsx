@@ -1,34 +1,30 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useApp } from '@/lib/store'
 import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { list, action } from '@/lib/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { list, action, getOne } from '@/lib/api'
 import { toast } from 'sonner'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
-import { CheckCircle2, Eye, PackageCheck, ArrowLeftRight } from 'lucide-react'
+import { Eye, PackageCheck, ArrowLeftRight, Printer, X } from 'lucide-react'
 
 export function InternalReceivePage() {
   const perm = usePerm('internal-receive')
+  const { setActive } = useApp()
   const [receives, setReceives] = useState<any[]>([])
   const [pendingTransfers, setPendingTransfers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
 
-  // Receive dialog
-  const [receiveOpen, setReceiveOpen] = useState(false)
-  const [activeTransfer, setActiveTransfer] = useState<any>(null)
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-
   // View dialog
   const [viewing, setViewing] = useState<any>(null)
+  // Receive challan (full-screen printable)
+  const [challan, setChallan] = useState<any>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -54,32 +50,31 @@ export function InternalReceivePage() {
     setFiltered(receives.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
   }, [q, receives])
 
-  const openReceiveForm = async (transfer: any) => {
-    try {
-      const res = await fetch(`/api/resource?slug=internal-transfers&id=${transfer.id}`)
-      if (!res.ok) throw new Error(await res.text())
-      const full = await res.json()
-      setActiveTransfer(full)
-      setNotes('')
-      setReceiveOpen(true)
-    } catch (e: any) {
-      toast.error(e.message)
-    }
+  // Open the full-page receive entry form for a transfer
+  const openReceiveForm = (transfer: any) => {
+    sessionStorage.setItem('receivingTransferId', transfer.id)
+    setActive('internal-receive-entry')
   }
 
-  const save = async () => {
-    if (!activeTransfer) return
-    setSaving(true)
+  // Auto-open challan after creating a receive (set by the entry page)
+  useEffect(() => {
+    load()
+    const challanId = sessionStorage.getItem('showChallanForReceive')
+    if (challanId) {
+      sessionStorage.removeItem('showChallanForReceive')
+      getOne('internal-receives', challanId).then((r: any) => {
+        setChallan(r)
+      }).catch(() => {})
+    }
+  }, [load])
+
+  // Open challan from the view dialog
+  const openChallan = async (row: any) => {
     try {
-      const r = await action('receive-internal-transfer', activeTransfer.id, { notes })
-      toast.success(`Created ${r.receiveNo}. Stock moved.`)
-      setReceiveOpen(false)
-      setActiveTransfer(null)
-      load()
-    } catch (e: any) {
-      toast.error(e.message)
-    } finally {
-      setSaving(false)
+      const full = await getOne('internal-receives', row.id) as any
+      setChallan(full)
+    } catch {
+      setChallan(row)
     }
   }
 
@@ -204,74 +199,6 @@ export function InternalReceivePage() {
         </Card>
       )}
 
-      {/* Receive / confirm dialog */}
-      <Dialog open={receiveOpen} onOpenChange={(v) => { setReceiveOpen(v); if (!v) { setActiveTransfer(null); setNotes('') } }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Receive Transfer {activeTransfer?.transferNo}</DialogTitle>
-            <DialogDescription>
-              Verify the items and serial numbers below match what was physically received, then confirm. Stock will be moved from <b>{activeTransfer?.fromEntity?.name}</b> to <b>{activeTransfer?.toEntity?.name}</b>.
-            </DialogDescription>
-          </DialogHeader>
-
-          {activeTransfer && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm bg-muted/40 p-3 rounded-md">
-              <div><span className="text-muted-foreground">From:</span> {activeTransfer.fromEntity?.name}</div>
-              <div><span className="text-muted-foreground">To:</span> {activeTransfer.toEntity?.name}</div>
-              <div><span className="text-muted-foreground">Date:</span> {new Date(activeTransfer.transferDate).toLocaleDateString()}</div>
-            </div>
-          )}
-
-          <div className="border rounded-md overflow-x-auto mt-3">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[180px]">Item</TableHead>
-                  <TableHead className="w-24">Qty</TableHead>
-                  <TableHead className="min-w-[260px]">Serial Numbers (verify)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activeTransfer?.items?.map((it: any) => (
-                  <TableRow key={it.id}>
-                    <TableCell>
-                      <div className="text-sm font-medium">{it.item?.name}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
-                    </TableCell>
-                    <TableCell className="font-medium">{it.quantity}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {it.serials ? (
-                        <span className="break-all">{it.serials}</span>
-                      ) : (
-                        <span className="text-muted-foreground">— (bulk item)</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div>
-            <Label className="text-xs">Notes</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="mt-1"
-              rows={2}
-              placeholder="Optional notes about this receive..."
-            />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReceiveOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving || !perm.canCreate}>
-              <CheckCircle2 className="h-4 w-4 mr-1" /> {saving ? 'Saving...' : 'Confirm Receive'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* View receive detail */}
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -288,6 +215,7 @@ export function InternalReceivePage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Sl</TableHead>
                   <TableHead>Item</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Barcodes</TableHead>
@@ -295,22 +223,188 @@ export function InternalReceivePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {viewing?.items?.map((it: any) => (
-                  <TableRow key={it.id}>
-                    <TableCell>
-                      <div className="text-sm font-medium">{it.item?.name}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
-                    </TableCell>
-                    <TableCell>{it.quantity}</TableCell>
-                    <TableCell className="font-mono text-[10px] max-w-[220px] whitespace-normal break-all">{it.barcodes || '—'}</TableCell>
-                    <TableCell className="font-mono text-[10px]">{it.serials || '—'}</TableCell>
+                {viewing?.items?.length > 0 ? (
+                  viewing.items.map((it: any, idx: number) => {
+                    // Parse the 'barcode|serial,barcode|serial' format from the transfer's serials field
+                    const units = (it.serials || '').split(',').map((u: string) => {
+                      const parts = u.split('|')
+                      return { barcode: parts[0] || '', serial: parts[1] || '' }
+                    }).filter((u: any) => u.barcode || u.serial)
+                    const barcodes = units.map((u: any) => u.barcode).filter(Boolean)
+                    const serials = units.map((u: any) => u.serial).filter(Boolean)
+                    return (
+                      <TableRow key={it.id}>
+                        <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                        <TableCell>
+                          <div className="text-sm font-medium">{it.item?.name || '—'}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{it.item?.itemCode}</div>
+                        </TableCell>
+                        <TableCell className="font-medium">{it.quantity}</TableCell>
+                        <TableCell>
+                          {barcodes.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {barcodes.map((bc: string, i: number) => (
+                                <span key={i} className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{bc}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {serials.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {serials.map((sn: string, i: number) => (
+                                <span key={i} className="text-[10px] font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">{sn}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">No items</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
+          <div className="flex gap-2 mt-3 justify-end">
+            <Button variant="outline" onClick={() => openChallan(viewing)} className="gap-1">
+              <Printer className="h-4 w-4" /> Print Challan
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
+
+      {/* Printable Receive Challan */}
+      {challan && (
+        <ReceiveChallan receive={challan} onClose={() => setChallan(null)} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Printable Receive Challan — shows the received items with barcode + serial
+ * in separate columns. Same layout as the transfer challan.
+ */
+function ReceiveChallan({ receive, onClose }: { receive: any; onClose: () => void }) {
+  const parseUnits = (serials: string | null | undefined): Array<{ barcode: string; serial: string }> => {
+    if (!serials) return []
+    return serials.split(',').map((unit: string) => {
+      const parts = unit.split('|')
+      return { barcode: parts[0] || '', serial: parts[1] || '' }
+    }).filter((u) => u.barcode || u.serial)
+  }
+
+  const allRows: Array<{ sl: number; itemName: string; itemCode: string; barcode: string; serial: string; qty: number; uom: string }> = []
+  let sl = 1
+  for (const it of (receive.items || [])) {
+    const units = parseUnits(it.serials)
+    const uom = it.item?.uom?.shortCode || ''
+    const itemName = it.item?.name || '—'
+    const itemCode = it.item?.itemCode || ''
+    if (units.length > 0) {
+      for (const u of units) {
+        allRows.push({ sl: sl++, itemName, itemCode, barcode: u.barcode, serial: u.serial, qty: 1, uom })
+      }
+    } else {
+      allRows.push({ sl: sl++, itemName, itemCode, barcode: '—', serial: '—', qty: it.quantity, uom })
+    }
+  }
+  const totalQty = allRows.reduce((s, r) => s + r.qty, 0)
+  const receiveDate = receive.receiveDate ? new Date(receive.receiveDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white overflow-y-auto print:relative print:overflow-visible">
+      <div className="sticky top-0 bg-white border-b px-4 py-2 flex items-center justify-between print:hidden">
+        <h2 className="text-sm font-semibold">Receive Challan — {receive.receiveNo}</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1">
+            <Printer className="h-4 w-4" /> Print
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="p-8 max-w-[800px] mx-auto print:p-0 print:max-w-none">
+        <div className="text-center border-b-2 border-black pb-3 mb-4">
+          <h1 className="text-2xl font-bold">{receive.entity?.name || receive.transfer?.toEntity?.name || '—'}</h1>
+          <h2 className="text-lg font-semibold mt-1">Stock Receive Challan</h2>
+          <div className="flex justify-between text-sm mt-2">
+            <span><b>Receive No:</b> {receive.receiveNo}</span>
+            <span><b>Date:</b> {receiveDate}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">From (Source Entity)</div>
+            <div className="text-base font-medium mt-1">{receive.transfer?.fromEntity?.name || '—'}</div>
+          </div>
+          <div className="border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">To (Receiving Entity)</div>
+            <div className="text-base font-medium mt-1">{receive.entity?.name || receive.transfer?.toEntity?.name || '—'}</div>
+          </div>
+        </div>
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="border border-black px-2 py-1.5 text-left w-10">Sl</th>
+              <th className="border border-black px-2 py-1.5 text-left">Item Name</th>
+              <th className="border border-black px-2 py-1.5 text-left w-24">Item Code</th>
+              <th className="border border-black px-2 py-1.5 text-left w-36">Barcode</th>
+              <th className="border border-black px-2 py-1.5 text-left w-32">Serial No</th>
+              <th className="border border-black px-2 py-1.5 text-center w-12">Qty</th>
+              <th className="border border-black px-2 py-1.5 text-center w-12">UoM</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRows.map((r, i) => (
+              <tr key={i}>
+                <td className="border border-black px-2 py-1 text-center text-xs">{r.sl}</td>
+                <td className="border border-black px-2 py-1 font-medium">{r.itemName}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.itemCode}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.barcode}</td>
+                <td className="border border-black px-2 py-1 font-mono text-xs">{r.serial}</td>
+                <td className="border border-black px-2 py-1 text-center font-medium">{r.qty}</td>
+                <td className="border border-black px-2 py-1 text-center text-xs">{r.uom}</td>
+              </tr>
+            ))}
+            <tr className="bg-slate-100 font-bold">
+              <td colSpan={5} className="border border-black px-2 py-1.5 text-right">Total Quantity:</td>
+              <td className="border border-black px-2 py-1.5 text-center">{totalQty}</td>
+              <td className="border border-black px-2 py-1.5"></td>
+            </tr>
+          </tbody>
+        </table>
+        {receive.notes && (
+          <div className="mt-4 border rounded p-3">
+            <div className="text-[10px] uppercase text-muted-foreground font-semibold">Notes</div>
+            <div className="text-sm mt-1">{receive.notes}</div>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-4 mt-12">
+          <div className="text-center">
+            <div className="border-t border-black pt-1 mx-8">
+              <div className="text-xs font-medium">Received By</div>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="border-t border-black pt-1 mx-8">
+              <div className="text-xs font-medium">Authorized Signature</div>
+            </div>
+          </div>
+        </div>
+        <div className="text-center text-[10px] text-muted-foreground mt-6 border-t pt-2">
+          System-generated challan from DFCL-IT Inventory System · Generated on {new Date().toLocaleString()}
+        </div>
+      </div>
     </div>
   )
 }

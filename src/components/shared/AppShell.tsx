@@ -51,6 +51,7 @@ import { BankInfosPage } from '@/components/modules/BankInfosPage'
 import { PurchaseEntryPage } from '@/components/modules/PurchaseEntryPage'
 import { SalesEntryPage } from '@/components/modules/SalesEntryPage'
 import { InternalTransferEntryPage } from '@/components/modules/InternalTransferEntryPage'
+import { InternalReceiveEntryPage } from '@/components/modules/InternalReceiveEntryPage'
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
@@ -105,6 +106,7 @@ export function AppShell() {
         'purchase-entry',
         'sales-entry',
         'internal-transfer-entry',
+        'internal-receive-entry',
       ]
       if (validModules.includes(hash)) {
         setTimeout(() => useApp.getState().setActive(hash as any), 0)
@@ -458,6 +460,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'purchase-entry': return <PurchaseEntryPage />
     case 'sales-entry': return <SalesEntryPage />
     case 'internal-transfer-entry': return <InternalTransferEntryPage />
+    case 'internal-receive-entry': return <InternalReceiveEntryPage />
     case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
