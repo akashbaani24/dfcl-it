@@ -181,6 +181,8 @@ export function ReportsPurchasePage() {
         return [
           { key: 'sl', label: 'Sl' },
           { key: 'purchaseDate', label: 'Purchase Date' },
+          { key: 'purchaseId', label: 'Purchase ID' },
+          { key: 'receiveNo', label: 'Purchase Receive ID' },
           { key: 'purchaseFor', label: 'Purchase For' },
           { key: 'supplier', label: 'Supplier' },
           { key: 'itemName', label: 'Item Name' },
@@ -486,6 +488,8 @@ export function ReportsPurchasePage() {
                       <>
                         <TableHead className="w-12">Sl</TableHead>
                         <TableHead>Purchase Date</TableHead>
+                        <TableHead>Purchase ID</TableHead>
+                        <TableHead>Purchase Receive ID</TableHead>
                         <TableHead>Purchase For</TableHead>
                         <TableHead>Supplier</TableHead>
                         <TableHead>Item Name</TableHead>
@@ -569,6 +573,8 @@ export function ReportsPurchasePage() {
                         <>
                           <TableCell className="text-xs text-muted-foreground">{r.sl}</TableCell>
                           <TableCell className="text-xs">{new Date(r.purchaseDate).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-xs font-mono">{r.purchaseId || r.purchaseNo}</TableCell>
+                          <TableCell className="text-xs font-mono">{r.receiveNo || '— (not received)'}</TableCell>
                           <TableCell className="text-xs">{r.purchaseFor}</TableCell>
                           <TableCell className="text-xs">{r.supplier}</TableCell>
                           <TableCell className="text-xs font-medium">{r.itemName}</TableCell>
@@ -650,7 +656,7 @@ export function ReportsPurchasePage() {
                     <TableRow className="bg-slate-100 font-bold">
                       {reportType === 'details' && (
                         <>
-                          <TableCell colSpan={9} className="text-right text-xs">Total:</TableCell>
+                          <TableCell colSpan={11} className="text-right text-xs">Total:</TableCell>
                           <TableCell className="text-xs text-right">{data.totalQty}</TableCell>
                           <TableCell colSpan={2}></TableCell>
                           <TableCell className="text-xs text-right">৳{(data.totalAmount || 0).toFixed(2)}</TableCell>

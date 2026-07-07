@@ -129,29 +129,97 @@ export async function GET(req: NextRequest) {
         })
 
         if (reportType === 'details') {
-          // Flat list: one row per item per purchase
-          // Columns: Sl, Purchase Date, Purchase For, Supplier, Item Name,
-          //          Model No, Size, Barcode, Serial Number, Qty, UoM,
-          //          Unit Price, Total
+          // Flat list: one row per item per purchase.
+          // Columns: Sl, Purchase Date, Purchase ID, Purchase Receive ID,
+          //          Purchase For, Supplier, Item Name, Model No, Size,
+          //          Barcode, Serial Number, Qty, UoM, Unit Price, Total
+          //
+          // BARCODE + SERIAL CROSS-REFERENCE:
+          //   The barcode and serial are NOT stored on PurchaseItem (they
+          //   don't exist at purchase creation time). They are generated
+          //   and stored on PurchaseReceiveItem when the purchase is
+          //   received. So we look up all PurchaseReceiveItems that
+          //   reference this PurchaseItem (via purchaseItemId) and collect
+          //   their barcodes + serials.
+          //
+          //   If a purchase has NOT been received yet, the barcode and
+          //   serial columns will show '—' (not received).
+
+          // Step 1: Collect all purchaseItem IDs from these purchases
+          const allPurchaseItemIds: string[] = []
+          for (const p of purchases) {
+            for (const it of p.items) {
+              allPurchaseItemIds.push(it.id)
+            }
+          }
+
+          // Step 2: Fetch all PurchaseReceiveItems that reference these
+          // PurchaseItems. Also include the parent PurchaseReceive to get
+          // the receiveNo.
+          const receiveItems = allPurchaseItemIds.length > 0
+            ? await db.purchaseReceiveItem.findMany({
+                where: { purchaseItemId: { in: allPurchaseItemIds } },
+                include: {
+                  receive: { select: { id: true, receiveNo: true, status: true } },
+                },
+              })
+            : []
+
+          // Step 3: Build a map: purchaseItemId → { receiveNos, barcodes, serials }
+          const receiveMap: Record<string, { receiveNos: string[]; barcodes: string[]; serials: string[] }> = {}
+          for (const ri of receiveItems) {
+            const pid = ri.purchaseItemId
+            if (!receiveMap[pid]) {
+              receiveMap[pid] = { receiveNos: [], barcodes: [], serials: [] }
+            }
+            // Collect the receive number(s) for this purchase item
+            if (ri.receive?.receiveNo && !receiveMap[pid].receiveNos.includes(ri.receive.receiveNo)) {
+              receiveMap[pid].receiveNos.push(ri.receive.receiveNo)
+            }
+            // Collect barcodes (comma-separated → split into individual)
+            if (ri.barcodes) {
+              const bcs = ri.barcodes.split(',').map((b: string) => b.trim()).filter(Boolean)
+              receiveMap[pid].barcodes.push(...bcs)
+            }
+            // Collect serials (comma-separated → split into individual)
+            if (ri.serials) {
+              const sns = ri.serials.split(',').map((s: string) => s.trim()).filter(Boolean)
+              receiveMap[pid].serials.push(...sns)
+            }
+          }
+
+          // Step 4: Build the detail rows
           const detailRows: any[] = []
           let sl = 1
           for (const p of purchases) {
             for (const it of p.items) {
               const item = it.item
-              // Parse barcodes/serials from the PurchaseItem (if stored)
-              // For purchases, serials may not be set at creation time —
-              // they come from PurchaseReceive. So we show what's available.
+              const recvData = receiveMap[it.id] || { receiveNos: [], barcodes: [], serials: [] }
+
+              // Format the barcode and serial columns:
+              //   - If received: show comma-separated barcodes / serials
+              //   - If not received: show '— (not received)'
+              const hasReceived = recvData.receiveNos.length > 0
+              const barcodeCol = hasReceived
+                ? (recvData.barcodes.length > 0 ? recvData.barcodes.join(', ') : '—')
+                : '— (not received)'
+              const serialCol = hasReceived
+                ? (recvData.serials.length > 0 ? recvData.serials.join(', ') : '—')
+                : '— (not received)'
+
               detailRows.push({
                 sl: sl++,
                 purchaseNo: p.purchaseNo,
                 purchaseDate: p.purchaseDate,
+                purchaseId: p.purchaseNo,           // Purchase ID = purchase number
+                receiveNo: hasReceived ? recvData.receiveNos.join(', ') : '— (not received)',
                 purchaseFor: p.entity?.name || '—',
                 supplier: p.supplier?.name || '—',
                 itemName: item?.name || '—',
                 modelNo: item?.itemCode || '—',
                 size: item?.description || '—',
-                barcode: '', // barcode comes at receive time
-                serialNumber: it.serials || '—',
+                barcode: barcodeCol,
+                serialNumber: serialCol,
                 qty: it.quantity,
                 uom: item?.uom?.shortCode || '—',
                 unitPrice: it.unitPrice,
