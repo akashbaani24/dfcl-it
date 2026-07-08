@@ -8,6 +8,7 @@ import {
   FileBarChart, ClipboardCheck, Tags, ScanLine,
   Image as ImageIcon,
   Printer, QrCode,
+  KeyRound, ShieldCheck,
 } from 'lucide-react'
 import { ModuleKey } from '@/lib/store'
 
@@ -99,6 +100,14 @@ export const SECTIONS: Section[] = [
     items: [
       { key: 'barcode-print', label: 'Barcode Print', icon: Printer },
       { key: 'qr-code-print', label: 'QR Code Print', icon: QrCode },
+    ],
+  },
+  {
+    title: 'Admin',
+    icon: ShieldCheck,
+    items: [
+      { key: 'manage-permissions', label: 'Manage Permissions', icon: ShieldCheck },
+      { key: 'password-reset-requests', label: 'Password Reset Requests', icon: KeyRound },
     ],
   },
 ]

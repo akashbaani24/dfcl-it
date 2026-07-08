@@ -47,6 +47,7 @@ const MODULE_TO_HASH: Record<string, string> = {
   'barcode-print': 'barcode-print',
   'qr-code-print': 'qr-code-print',
   'manage-permissions': 'manage-permissions',
+  'password-reset-requests': 'password-reset-requests',
 }
 
 export function Sidebar() {

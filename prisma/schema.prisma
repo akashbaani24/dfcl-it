@@ -704,3 +704,31 @@ model SequentialNumber {
   @@unique([docType, yymmdd])
   @@index([docType])
 }
+
+// ============ PASSWORD RESET REQUESTS ============
+
+// When a user forgets their password, they submit a request from the login
+// page (just their userId). The request shows up in the admin's "Password
+// Reset Requests" queue. Admin reviews it, sets a new password, marks the
+// request as RESOLVED with an optional message that the user will see on
+// their next login attempt.
+//
+// Status flow: PENDING → RESOLVED (admin set new password)
+//              PENDING → REJECTED (admin declined, with reason)
+//              PENDING → CANCELLED (user cancelled by re-logging in)
+model PasswordResetRequest {
+  id           String   @id @default(cuid())
+  requestNo    String   @unique   // e.g. PRR-260708-0001
+  userId       String   // the userId the user typed (NOT the FK — it might not exist)
+  employeeName String?  // resolved employee name (if userId matched an account)
+  status       String   @default("PENDING")  // PENDING, RESOLVED, REJECTED, CANCELLED
+  message      String?  // admin's reply message (e.g. "New password is xxx, call me")
+  resolvedBy   String?  // admin userId who resolved it
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}

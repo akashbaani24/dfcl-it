@@ -95,6 +95,29 @@ const TABLE_MIGRATIONS: Array<{ table: string; sql: string; indexes?: string[] }
       'CREATE INDEX IF NOT EXISTS SequentialNumber_docType_idx ON SequentialNumber(docType)',
     ],
   },
+  {
+    // Password reset request queue — submitted by users from login page,
+    // resolved by admin from the admin panel.
+    table: 'PasswordResetRequest',
+    sql: `CREATE TABLE IF NOT EXISTS PasswordResetRequest (
+      id TEXT PRIMARY KEY NOT NULL,
+      requestNo TEXT NOT NULL UNIQUE,
+      userId TEXT NOT NULL,
+      employeeName TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      message TEXT,
+      resolvedBy TEXT,
+      resolvedAt DATETIME,
+      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    indexes: [
+      'CREATE UNIQUE INDEX IF NOT EXISTS PasswordResetRequest_requestNo_key ON PasswordResetRequest(requestNo)',
+      'CREATE INDEX IF NOT EXISTS PasswordResetRequest_userId_idx ON PasswordResetRequest(userId)',
+      'CREATE INDEX IF NOT EXISTS PasswordResetRequest_status_idx ON PasswordResetRequest(status)',
+      'CREATE INDEX IF NOT EXISTS PasswordResetRequest_createdAt_idx ON PasswordResetRequest(createdAt)',
+    ],
+  },
 ]
 
 export async function GET(req: NextRequest) {

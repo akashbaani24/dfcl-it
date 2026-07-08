@@ -86,6 +86,7 @@ const AdjustmentApprovalPage = dyn(() => import('@/components/modules/Adjustment
 const AdjustmentApprovalViewPage = dyn(() => import('@/components/modules/AdjustmentApprovalPage').then(m => ({ default: m.AdjustmentApprovalViewPage })))
 const ReportsAdjustmentPage = dyn(() => import('@/components/modules/ReportsAdjustmentPage').then(m => ({ default: m.ReportsAdjustmentPage })))
 const ExpenseEntryPage = dyn(() => import('@/components/modules/ExpenseEntryPage').then(m => ({ default: m.ExpenseEntryPage })))
+const PasswordResetRequestsPage = dyn(() => import('@/components/modules/PasswordResetRequestsPage').then(m => ({ default: m.PasswordResetRequestsPage })))
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 // (module page imports below are lazy — see ModuleLoader / dyn helper)
@@ -150,6 +151,7 @@ export function AppShell() {
         'reports-adjustment',
         'expense-entry',
         'expense-receive-entry',
+        'password-reset-requests',
       ]
       if (validModules.includes(hash)) {
         setTimeout(() => useApp.getState().setActive(hash as any), 0)
@@ -547,6 +549,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'reports-adjustment': return <ReportsAdjustmentPage />
     case 'expense-entry': return <ExpenseEntryPage />
     case 'expense-receive-entry': return <ExpenseEntryPage entryType="RECEIVE" backTo="accounts-receive" />
+    case 'password-reset-requests': return <PasswordResetRequestsPage />
     case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />

@@ -50,6 +50,7 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'qr-code-print', label: 'QR Code Print', section: 'Tools' },
   // Admin
   { key: 'manage-permissions', label: 'Manage Permissions', section: 'Admin' },
+  { key: 'password-reset-requests', label: 'Password Reset Requests', section: 'Admin' },
 ]
 
 export const PERMISSION_ACTIONS = [

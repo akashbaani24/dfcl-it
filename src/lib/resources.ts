@@ -247,6 +247,15 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'entryNo', autoNumberPrefix: 'ACC',
   },
+  // Password Reset Requests — submitted from the login page by users who
+  // forgot their password. Admin reviews and resolves from the admin panel.
+  'password-reset-requests': {
+    model: 'passwordResetRequest',
+    listSelect: { id: true, requestNo: true, userId: true, employeeName: true, status: true, message: true, resolvedBy: true, resolvedAt: true, createdAt: true, updatedAt: true },
+    writable: false,  // requests are only created via the public /api/password-reset endpoint
+    updatable: true,  // admin can update status/message/resolvedBy
+    deletable: true,
+  },
 }
 
 // Generate a document number. If `docType` is provided, uses the new

@@ -964,6 +964,80 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
+      // ============================================================
+      // PASSWORD RESET — admin resolves a user's reset request
+      // ============================================================
+      // Inputs: id (PasswordResetRequest id)
+      //         extra: { newPassword: string, message?: string, adminUserId: string }
+      // Side effects:
+      //   1. Looks up User by request.userId. If found → updates password.
+      //   2. Marks the request RESOLVED with the admin's message.
+      //   3. Returns the resolved row.
+      //
+      // If the user doesn't exist (typo in userId), the admin can still mark
+      // the request as RESOLVED with a message but no password change happens.
+      case 'resolve-password-reset': {
+        const { newPassword, message, adminUserId } = extra || {}
+        if (!id) {
+          return NextResponse.json({ error: 'Missing request id' }, { status: 400 })
+        }
+        const reqRow = await db.passwordResetRequest.findUnique({ where: { id } })
+        if (!reqRow) {
+          return NextResponse.json({ error: 'Reset request not found' }, { status: 404 })
+        }
+        if (reqRow.status === 'RESOLVED') {
+          return NextResponse.json({ error: 'Request already resolved' }, { status: 400 })
+        }
+
+        // 1. Update the user's password (if user exists)
+        let passwordChanged = false
+        if (newPassword && newPassword.trim().length >= 4) {
+          const { hashPassword } = await import('@/lib/auth-server')
+          const hashed = hashPassword(newPassword.trim())
+          const target = await db.user.findUnique({
+            where: { userId: reqRow.userId },
+          })
+          if (target) {
+            await db.user.update({
+              where: { id: target.id },
+              data: { password: hashed },
+            })
+            passwordChanged = true
+          }
+        }
+
+        // 2. Mark the request RESOLVED with admin's message
+        const updated = await db.passwordResetRequest.update({
+          where: { id },
+          data: {
+            status: 'RESOLVED',
+            message: message || (passwordChanged ? 'Your password has been reset. Please contact admin for the new password.' : 'No action taken.'),
+            resolvedBy: adminUserId || 'admin',
+            resolvedAt: new Date(),
+          },
+        })
+
+        return NextResponse.json({ ok: true, passwordChanged, request: updated })
+      }
+
+      // Admin rejects a reset request (e.g. invalid userId, suspicious request)
+      case 'reject-password-reset': {
+        const { message, adminUserId } = extra || {}
+        if (!id) {
+          return NextResponse.json({ error: 'Missing request id' }, { status: 400 })
+        }
+        const updated = await db.passwordResetRequest.update({
+          where: { id },
+          data: {
+            status: 'REJECTED',
+            message: message || 'Request rejected by admin.',
+            resolvedBy: adminUserId || 'admin',
+            resolvedAt: new Date(),
+          },
+        })
+        return NextResponse.json({ ok: true, request: updated })
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
     }

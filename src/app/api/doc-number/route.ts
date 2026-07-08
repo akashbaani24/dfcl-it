@@ -35,6 +35,7 @@ const DOC_CONFIG: Record<string, { prefix: string; typeCode: string }> = {
   SALES_REFUND:         { prefix: 'SLRF',  typeCode: '08' },
   PURCHASE_REQUISITION: { prefix: 'PRQ',   typeCode: '09' },
   PURCHASE_RECEIVE:     { prefix: 'PRV',   typeCode: '010' },
+  PASSWORD_RESET:       { prefix: 'PRR',   typeCode: '011' },
 }
 
 export async function GET(req: NextRequest) {
