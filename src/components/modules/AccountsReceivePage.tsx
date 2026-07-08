@@ -1,10 +1,9 @@
 'use client'
 import { ResourcePage, Col } from '@/components/shared/ResourcePage'
-import { FieldDef } from '@/components/shared/FormDialog'
 import { Badge } from '@/components/shared/PageHeader'
 import { useEffect, useState } from 'react'
 import { list } from '@/lib/api'
-import { useNavigateToEdit } from '@/components/shared/useNavigateToEdit'
+import { useApp } from '@/lib/store'
 
 const columns: Col[] = [
   { key: 'entryNo', label: 'Entry No' },
@@ -12,66 +11,64 @@ const columns: Col[] = [
   { key: 'entityId', label: 'Entity', render: (r) => r.entity?.name },
   { key: 'category', label: 'Category' },
   { key: 'description', label: 'Description' },
-  { key: 'method', label: 'Method', render: (r) => <Badge status={r.method === 'CASH' ? 'DELIVERED' : 'CONVERTED'} /> },
-  { key: 'amount', label: 'Amount', render: (r) => `৳${r.amount.toFixed(2)}`, className: 'text-right' },
+  {
+    key: 'method',
+    label: 'Method',
+    render: (r) => <Badge status={r.method === 'CASH' ? 'DELIVERED' : r.method === 'BANK' ? 'CONVERTED' : 'PENDING'} />,
+  },
+  {
+    // Show the linked bank account when method=BANK.
+    key: 'bankInfo',
+    label: 'Bank Account',
+    render: (r) => {
+      if (r.method !== 'BANK') return <span className="text-muted-foreground">—</span>
+      const b = r.bankInfo
+      if (!b) return <span className="text-muted-foreground text-xs">Not linked</span>
+      return (
+        <span className="text-xs">
+          {b.bankName}
+          <span className="text-muted-foreground font-mono ml-1">({b.accountNumber})</span>
+        </span>
+      )
+    },
+  },
+  { key: 'amount', label: 'Amount', render: (r) => `৳${(r.amount ?? 0).toFixed(2)}`, className: 'text-right' },
 ]
 
 export function AccountsReceivePage() {
-  const [entities, setEntities] = useState<any[]>([])
-  const [receiveTypes, setReceiveTypes] = useState<any[]>([])
-  const { navigateToAdd, navigateToEdit } = useNavigateToEdit()
+  const { setActive } = useApp()
+  const [, setEntities] = useState<any[]>([])
+  const [, setReceiveTypes] = useState<any[]>([])
 
   useEffect(() => {
     list('entities').then((r) => setEntities(r as any[])).catch(() => {})
     list('account-types', { type: 'RECEIVE' }).then((r) => setReceiveTypes(r as any[])).catch(() => {})
   }, [])
 
-  const fields: FieldDef[] = [
-    {
-      name: 'entityId', label: 'Entity', type: 'select', required: true,
-      options: entities.map((e) => ({ value: e.id, label: e.name, sublabel: e.shortCode })),
-    },
-    {
-      name: 'category', label: 'Receive Type', type: 'select', required: true,
-      options: receiveTypes.map((t) => ({ value: t.name, label: t.name })),
-      help: 'Manage types from Company Setup → Account Type Setup',
-    },
-    { name: 'amount', label: 'Amount (৳)', type: 'number', required: true, default: 0 },
-    { name: 'date', label: 'Date', type: 'date', required: true, default: new Date().toISOString().slice(0, 10) },
-    {
-      name: 'method', label: 'Receipt Method', type: 'select', default: 'CASH',
-      options: [
-        { value: 'CASH', label: 'Cash' },
-        { value: 'BANK', label: 'Bank' },
-        { value: 'MOBILE', label: 'Mobile' },
-      ],
-    },
-    { name: 'description', label: 'Description', type: 'textarea', full: true },
-  ]
-
-  // Build nav config inside component so dynamic select options (entities, receive types)
-  // are captured fresh from current state when Add/Edit is clicked.
-  const buildNavConfig = () => ({
-    slug: 'account-entries',
-    title: 'Receive',
-    fields,
-    defaultValues: { type: 'RECEIVE' },
-    backTo: 'accounts-receive' as const,
-  })
+  // Navigate to the dedicated ExpenseEntryPage with entryType=RECEIVE.
+  // This gives us the conditional Bank Account ComboBox for free.
+  const goAdd = () => {
+    sessionStorage.removeItem('editingExpenseId')
+    setActive('expense-receive-entry')
+  }
+  const goEdit = (row: any) => {
+    sessionStorage.setItem('editingExpenseId', row.id)
+    setActive('expense-receive-entry')
+  }
 
   return (
     <ResourcePage
       slug="account-entries"
       title="Daily Receive"
-      description="Record money received. Types are managed from Company Setup → Account Type Setup."
-      fields={fields}
+      description="Record money received. When receipt is via Bank, select the bank account used. Types are managed from Company Setup → Account Type Setup."
+      fields={[]}
       columns={columns}
       addLabel="Add Receive"
       filter={{ type: 'RECEIVE' }}
       defaultValues={{ type: 'RECEIVE' }}
       moduleKey="accounts-receive"
-      onCustomAdd={() => navigateToAdd(buildNavConfig())}
-      onCustomEdit={(row) => navigateToEdit(row.id, buildNavConfig())}
+      onCustomAdd={goAdd}
+      onCustomEdit={goEdit}
     />
   )
 }

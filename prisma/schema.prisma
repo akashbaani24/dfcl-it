@@ -268,6 +268,9 @@ model BankInfo {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
+  // Reverse relations — expenses/receives linked to this bank account
+  accountEntries AccountEntry[]
+
   @@index([isActive])
 }
 
@@ -660,6 +663,8 @@ model AccountEntry {
   date        DateTime @default(now())
   description String?
   method      String   @default("CASH") // CASH, BANK, MOBILE
+  bankInfoId  String?  // when method=BANK, references the bank account used
+  bankInfo    BankInfo? @relation(fields: [bankInfoId], references: [id])
   refType     String?
   refId       String?
   attachments String?  // JSON array of base64 data URLs (bills, receipts, etc.)
@@ -668,6 +673,8 @@ model AccountEntry {
   @@index([entityId])
   @@index([type])
   @@index([category])
+  @@index([method])
+  @@index([bankInfoId])
   @@index([date])
   @@index([createdAt])
 }

@@ -68,6 +68,12 @@ const MIGRATIONS: Migration[] = [
     sql: 'ALTER TABLE PurchaseItem ADD COLUMN expiryDate DATETIME',
     reason: 'Optional expiry/warranty expiry date per purchase line item.',
   },
+  {
+    table: 'AccountEntry',
+    column: 'bankInfoId',
+    sql: 'ALTER TABLE AccountEntry ADD COLUMN bankInfoId TEXT',
+    reason: 'When payment method is BANK, references the BankInfo record used for this expense/receive.',
+  },
   // Add future migrations here as needed.
 ]
 

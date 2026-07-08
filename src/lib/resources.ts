@@ -239,8 +239,11 @@ export const RESOURCES: Record<string, ResourceConfig> = {
   // Accounts
   'account-entries': {
     model: 'accountEntry',
-    include: { entity: { select: { id: true, name: true } } },
-    listSelect: { id: true, entryNo: true, entityId: true, type: true, category: true, amount: true, date: true, description: true, method: true, refType: true, refId: true, createdAt: true },
+    include: {
+      entity: { select: { id: true, name: true } },
+      bankInfo: { select: { id: true, bankName: true, accountName: true, accountNumber: true } },
+    },
+    listSelect: { id: true, entryNo: true, entityId: true, type: true, category: true, amount: true, date: true, description: true, method: true, bankInfoId: true, refType: true, refId: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
     autoNumberField: 'entryNo', autoNumberPrefix: 'ACC',
   },

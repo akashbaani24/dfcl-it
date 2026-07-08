@@ -14,7 +14,7 @@ export type FieldDef = {
   name: string
   label: string
   type?: 'text' | 'number' | 'textarea' | 'select' | 'switch' | 'date' | 'files' | 'file'
-  options?: { value: string; label: string }[]
+  options?: { value: string; label: string; sublabel?: string }[]
   required?: boolean
   placeholder?: string
   default?: any
@@ -22,6 +22,10 @@ export type FieldDef = {
   help?: string
   accept?: string  // for file/files type
   maxSizeMB?: number  // for file/files type
+  // Conditional visibility — field is shown only when this returns true.
+  // Receives the current form data so it can react to other field values
+  // (e.g. show a "Bank Account" combo box only when method === 'BANK').
+  showWhen?: (form: Record<string, any>) => boolean
 }
 
 export function FormDialog({
@@ -109,7 +113,7 @@ export function FormDialog({
           <DialogDescription>Fill up the form fields below and submit.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-          {fields.map((f) => (
+          {fields.filter((f) => !f.showWhen || f.showWhen(data)).map((f) => (
             <div key={f.name} className={f.full ? 'sm:col-span-2' : ''}>
               <Label htmlFor={f.name} className="text-xs">
                 {f.label}{f.required && <span className="text-destructive ml-0.5">*</span>}

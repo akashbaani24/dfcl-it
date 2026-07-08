@@ -18,12 +18,13 @@ type FieldDef = {
   name: string
   label: string
   type?: 'text' | 'number' | 'textarea' | 'select' | 'switch' | 'date'
-  options?: { value: string; label: string }[]
+  options?: { value: string; label: string; sublabel?: string }[]
   required?: boolean
   placeholder?: string
   default?: any
   full?: boolean
   help?: string
+  showWhen?: (form: Record<string, any>) => boolean
 }
 
 export function GenericAddEditPage({
@@ -164,7 +165,7 @@ export function GenericAddEditPage({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {fields.map((f) => {
+            {fields.filter((f) => !f.showWhen || f.showWhen(form)).map((f) => {
               const isFull = f.full
               return (
                 <div key={f.name} className={isFull ? 'sm:col-span-2' : ''}>
