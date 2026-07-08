@@ -787,11 +787,59 @@ export async function POST(req: NextRequest) {
           // For DECREASE, mark serials as DAMAGED
           if (perItemEffect === 'DECREASE') {
             for (const sn of serials) {
-              const is = await db.itemSerial.findUnique({
+              // Try to find by serial number first, then by barcode
+              let is = await db.itemSerial.findUnique({
                 where: { itemId_serialNumber: { itemId: it.itemId, serialNumber: sn } },
               })
+              if (!is) {
+                // Try barcode match
+                is = await db.itemSerial.findFirst({
+                  where: { itemId: it.itemId, barcode: sn },
+                })
+              }
               if (is) {
                 await db.itemSerial.update({ where: { id: is.id }, data: { status: 'DAMAGED' } })
+              }
+            }
+          }
+
+          // For INCREASE (Excess), create new ItemSerial records so the
+          // stock page shows the new units. If a barcode was scanned,
+          // use it as both serial number and barcode.
+          if (perItemEffect === 'INCREASE' && serials.length > 0) {
+            for (const sn of serials) {
+              // Check if this serial/barcode already exists
+              const existing = await db.itemSerial.findFirst({
+                where: {
+                  OR: [
+                    { itemId: it.itemId, serialNumber: sn },
+                    { itemId: it.itemId, barcode: sn },
+                  ],
+                },
+              })
+              if (!existing) {
+                // Create a new ItemSerial — use the scanned value as both
+                // barcode and serial number (since adjustment doesn't have
+                // separate barcode/serial fields)
+                await db.itemSerial.create({
+                  data: {
+                    itemId: it.itemId,
+                    serialNumber: sn,
+                    barcode: sn,
+                    entityId: adj.entityId,
+                    status: 'IN_STOCK',
+                  },
+                })
+                console.log(`[approve-adjustment] Created ItemSerial: ${sn}`)
+              } else {
+                // If it exists but is DAMAGED/RETURNED, set back to IN_STOCK
+                if (existing.status !== 'IN_STOCK') {
+                  await db.itemSerial.update({
+                    where: { id: existing.id },
+                    data: { status: 'IN_STOCK', entityId: adj.entityId },
+                  })
+                  console.log(`[approve-adjustment] Restored ItemSerial to IN_STOCK: ${sn}`)
+                }
               }
             }
           }
