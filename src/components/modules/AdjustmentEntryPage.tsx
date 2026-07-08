@@ -1,12 +1,10 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useApp } from '@/lib/store'
-import { useAuth } from '@/lib/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ComboBox } from '@/components/ui/combobox'
 import { ArrowLeft, Save, Plus, Trash2, ScanLine } from 'lucide-react'
 import { list, create, getOne } from '@/lib/api'
 import { toast } from 'sonner'
@@ -22,32 +20,27 @@ type AdjustLine = {
   barcode: string
   serialNumber: string
   quantity: number
-  adjustType: AdjustType  // per-item adjust type
+  adjustType: AdjustType
 }
 
-const ADJUST_TYPES: Array<{ value: AdjustType; label: string; desc: string; effect: string }> = [
-  { value: 'EXCESS', label: 'Excess', desc: 'Stock will increase (+)', effect: 'INCREASE' },
-  { value: 'SHORTAGE', label: 'Shortage', desc: 'Stock will decrease (−)', effect: 'DECREASE' },
-  { value: 'REJECT', label: 'Reject', desc: 'Stock will decrease (−)', effect: 'DECREASE' },
-  { value: 'WASTAGE', label: 'Wastage', desc: 'Stock will decrease (−)', effect: 'DECREASE' },
+const ADJUST_TYPES: Array<{ value: AdjustType; label: string; effect: string }> = [
+  { value: 'EXCESS', label: 'Excess', effect: 'INCREASE' },
+  { value: 'SHORTAGE', label: 'Shortage', effect: 'DECREASE' },
+  { value: 'REJECT', label: 'Reject', effect: 'DECREASE' },
+  { value: 'WASTAGE', label: 'Wastage', effect: 'DECREASE' },
 ]
 
 export function AdjustmentEntryPage() {
   const { setActive, currentEntityId, selectedEntityId, selectedEntityName } = useApp()
-  const { user } = useAuth()
 
   const [entities, setEntities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Form
   const [entityId, setEntityId] = useState('')
   const [adjustDate, setAdjustDate] = useState(new Date().toISOString().slice(0, 10))
-  const [adjustType, setAdjustType] = useState<AdjustType>('EXCESS')
   const [reason, setReason] = useState('')
   const [lines, setLines] = useState<AdjustLine[]>([])
-
-  // Barcode scanner
   const [barcodeInput, setBarcodeInput] = useState('')
   const [scanning, setScanning] = useState(false)
   const barcodeRef = useRef<HTMLInputElement>(null)
@@ -93,7 +86,7 @@ export function AdjustmentEntryPage() {
         barcode: data.serial?.barcode || barcode.trim(),
         serialNumber: data.serial?.serialNumber || '',
         quantity: 1,
-        adjustType: adjustType,  // inherit from the header-level default
+        adjustType: 'EXCESS',
       }
       setLines([...lines, newLine])
       toast.success(`Added: ${item.name}`)
@@ -106,19 +99,7 @@ export function AdjustmentEntryPage() {
   }, [entityId, lines])
 
   const onBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      lookupBarcode(barcodeInput)
-    }
-  }
-
-  const addLineManual = () => {
-    setLines([...lines, {
-      id: Math.random().toString(36).slice(2),
-      itemId: '', itemName: '', itemCode: '', uom: '',
-      barcode: '', serialNumber: '', quantity: 1,
-      adjustType: adjustType,
-    }])
+    if (e.key === 'Enter') { e.preventDefault(); lookupBarcode(barcodeInput) }
   }
 
   const updateLine = (id: string, patch: Partial<AdjustLine>) => {
@@ -127,14 +108,6 @@ export function AdjustmentEntryPage() {
 
   const removeLine = (id: string) => {
     setLines(lines.filter((l) => l.id !== id))
-  }
-
-  const onItemSelect = async (id: string, itemId: string) => {
-    if (!itemId) { updateLine(id, { itemId: '', itemName: '', uom: '' }); return }
-    try {
-      const full = await getOne('items', itemId) as any
-      updateLine(id, { itemId, itemName: full.name, uom: full.uom?.shortCode || '' })
-    } catch { updateLine(id, { itemId, itemName: '', uom: '' }) }
   }
 
   const save = async () => {
@@ -149,15 +122,10 @@ export function AdjustmentEntryPage() {
     savingRef.current = true
     setSaving(true)
     try {
-      // Determine overall type: if all items are EXCESS → INCREASE,
-      // if all are SHORTAGE/REJECT/WASTAGE → DECREASE,
-      // if mixed → MIXED
       const types = new Set(lines.map(l => l.adjustType))
       const allExcess = [...types].every(t => t === 'EXCESS')
       const allDecrease = [...types].every(t => t !== 'EXCESS')
       const overallType = allExcess ? 'INCREASE' : allDecrease ? 'DECREASE' : 'MIXED'
-
-      // Build a summary of per-item types for the reason field
       const typeSummary = lines.map(l => `${l.itemName}:${l.adjustType}`).join(', ')
 
       const payload = {
@@ -170,9 +138,6 @@ export function AdjustmentEntryPage() {
           create: lines.map((l) => {
             const adjTypeDef = ADJUST_TYPES.find(t => t.value === l.adjustType)
             const effect = adjTypeDef?.effect || 'INCREASE'
-            // Encode the per-item adjust type + effect in the serials field
-            // so the approval action knows how to handle each item.
-            // Format: "ADJTYPE:EXCESS|EFFECT:INCREASE|barcode|serial"
             const adjInfo = `ADJTYPE:${l.adjustType}|EFFECT:${effect}`
             const bcSn = [l.barcode, l.serialNumber].filter(Boolean).join(',')
             return {
@@ -208,140 +173,108 @@ export function AdjustmentEntryPage() {
         <Button variant="outline" size="icon" onClick={goBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">New Adjustment</h1>
-          <p className="text-xs text-muted-foreground">Adjust stock by excess, shortage, reject, or wastage — requires approval</p>
-        </div>
+        <h1 className="text-xl font-semibold tracking-tight">New Adjustment Entry</h1>
       </div>
 
-      <div className="border rounded-lg overflow-hidden bg-white">
-        {/* Header section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 border-b">
-          <div className="p-3 border-r border-b sm:border-b-0">
-            <Label className="text-xs font-semibold">Entity (Default)</Label>
+      <div className="border-2 border-black rounded-lg bg-white max-w-4xl mx-auto">
+        {/* Header fields */}
+        <div className="grid grid-cols-2 gap-0 border-b-2 border-black">
+          <div className="p-3 border-r-2 border-black">
+            <Label className="text-xs font-bold">Entity (Default)</Label>
             <div className="mt-1 flex items-center gap-2 h-10 px-3 border rounded-md bg-slate-50">
               <span className="text-sm font-medium">{fromEntity?.name || selectedEntityName || '—'}</span>
-              <span className="text-[10px] text-muted-foreground ml-auto">(current entity)</span>
             </div>
-          </div>
-          <div className="p-3 border-r border-b sm:border-b-0">
-            <Label className="text-xs font-semibold">Date</Label>
-            <Input type="date" value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)} className="mt-1 h-10" />
           </div>
           <div className="p-3">
-            <Label className="text-xs font-semibold">Default Adjust Type <span className="text-muted-foreground font-normal">(for new items)</span></Label>
-            <div className="mt-1">
-              <ComboBox
-                value={adjustType}
-                onChange={(v) => setAdjustType(v as AdjustType)}
-                options={ADJUST_TYPES.map(t => ({ value: t.value, label: t.label, sublabel: t.desc }))}
-                placeholder="Select type"
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Each item can have its own type — change per row in the table below
-            </p>
+            <Label className="text-xs font-bold">Adjust Date</Label>
+            <Input type="date" value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)} className="mt-1 h-10" />
           </div>
         </div>
 
-        {/* Barcode scanner */}
-        <div className="p-3 border-b bg-blue-50/50">
-          <Label className="text-xs font-semibold flex items-center gap-1 text-blue-700">
-            <ScanLine className="h-4 w-4" /> Barcode / Serial Scanner
-          </Label>
-          <p className="text-[11px] text-muted-foreground mt-0.5 mb-2">
-            Scan or type barcode/serial, press Enter — item name + UoM auto-fills
-          </p>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <ScanLine className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                ref={barcodeRef}
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                onKeyDown={onBarcodeKeyDown}
-                placeholder="Scan or type barcode / serial..."
-                className="pl-8 h-10 font-mono"
-                disabled={scanning || !entityId}
-              />
-            </div>
-            <Button onClick={() => lookupBarcode(barcodeInput)} disabled={scanning || !barcodeInput.trim()} className="gap-1">
-              {scanning ? '...' : 'Add'}
-            </Button>
-            <Button variant="outline" onClick={addLineManual} className="gap-1">
-              <Plus className="h-4 w-4" /> Manual
-            </Button>
+        {/* Reason */}
+        <div className="p-3 border-b-2 border-black">
+          <Label className="text-xs font-bold">Adjust Reason</Label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for adjustment..."
+            className="mt-1"
+            rows={2}
+          />
+        </div>
+
+        {/* Barcode scan input */}
+        <div className="p-3 border-b-2 border-black flex items-center gap-2">
+          <div className="relative flex-1">
+            <ScanLine className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={barcodeRef}
+              value={barcodeInput}
+              onChange={(e) => setBarcodeInput(e.target.value)}
+              onKeyDown={onBarcodeKeyDown}
+              placeholder="Manually type Serial / Barcode or Scan Here"
+              className="pl-8 h-10 font-mono"
+              disabled={scanning || !entityId}
+            />
           </div>
+          <Button onClick={() => lookupBarcode(barcodeInput)} disabled={scanning || !barcodeInput.trim()} className="gap-1">
+            <Plus className="h-4 w-4" /> Add
+          </Button>
         </div>
 
         {/* Items table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-slate-100 border-b-2 border-black">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-8">Sl</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs min-w-[200px]">Item Name</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-28">Barcode</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-28">Serial</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-20">UoM</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-32">Adjust Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-xs w-24">Qty</th>
-                <th className="px-3 py-2 w-10"></th>
+                <th className="px-2 py-2 text-center font-bold text-xs w-8 border-r border-slate-300">Sl</th>
+                <th className="px-2 py-2 text-left font-bold text-xs border-r border-slate-300">Item Name</th>
+                <th className="px-2 py-2 text-left font-bold text-xs w-28 border-r border-slate-300">Barcode</th>
+                <th className="px-2 py-2 text-left font-bold text-xs w-28 border-r border-slate-300">Serial</th>
+                <th className="px-2 py-2 text-center font-bold text-xs w-20 border-r border-slate-300">Qty</th>
+                <th className="px-2 py-2 text-left font-bold text-xs w-16 border-r border-slate-300">UoM</th>
+                <th className="px-2 py-2 text-left font-bold text-xs w-28 border-r border-slate-300">Adjust type</th>
+                <th className="px-2 py-2 w-8"></th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l, idx) => (
-                <tr key={l.id} className="border-b hover:bg-slate-50/50">
-                  <td className="px-3 py-2 text-center text-xs text-muted-foreground">{idx + 1}</td>
-                  <td className="px-3 py-2">
-                    {l.itemName ? (
-                      <div>
-                        <div className="font-medium text-xs">{l.itemName}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode}</div>
-                      </div>
-                    ) : (
-                      <Input
-                        value={l.itemId}
-                        onChange={(e) => onItemSelect(l.id, e.target.value)}
-                        placeholder="Type item ID..."
-                        className="h-8 text-xs"
-                      />
-                    )}
+                <tr key={l.id} className="border-b border-slate-200 hover:bg-slate-50/50">
+                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-r border-slate-200">{idx + 1}</td>
+                  <td className="px-2 py-1.5 border-r border-slate-200">
+                    <div className="text-xs font-medium">{l.itemName}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono">{l.itemCode}</div>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{l.barcode || '—'}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{l.serialNumber || '—'}</td>
-                  <td className="px-3 py-2 text-xs">{l.uom || '—'}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5 font-mono text-xs border-r border-slate-200">{l.barcode || '—'}</td>
+                  <td className="px-2 py-1.5 font-mono text-xs border-r border-slate-200">{l.serialNumber || '—'}</td>
+                  <td className="px-2 py-1.5 border-r border-slate-200">
+                    <Input
+                      type="number" min={1} value={l.quantity}
+                      onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
+                      className="h-7 w-16 text-center text-xs"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 text-xs border-r border-slate-200">{l.uom || '—'}</td>
+                  <td className="px-2 py-1.5 border-r border-slate-200">
                     <select
                       value={l.adjustType}
                       onChange={(e) => updateLine(l.id, { adjustType: e.target.value as AdjustType })}
-                      className="h-8 w-full text-xs border rounded px-1"
+                      className="h-7 w-full text-xs border rounded px-1"
                     >
-                      {ADJUST_TYPES.map(t => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
+                      {ADJUST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      type="number"
-                      min={1}
-                      value={l.quantity}
-                      onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value) })}
-                      className="h-8 w-20"
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeLine(l.id)}>
+                  <td className="px-2 py-1.5 text-center">
+                    <button onClick={() => removeLine(l.id)} className="text-red-500 hover:text-red-700">
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
                   </td>
                 </tr>
               ))}
               {lines.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    No items added. Scan a barcode or click "Manual" to add.
+                  <td colSpan={8} className="px-2 py-6 text-center text-xs text-muted-foreground">
+                    No items added. Scan barcode above to add items.
                   </td>
                 </tr>
               )}
@@ -349,24 +282,12 @@ export function AdjustmentEntryPage() {
           </table>
         </div>
 
-        {/* Reason */}
-        <div className="p-3 border-t">
-          <Label className="text-xs font-semibold">Adjust Reason</Label>
-          <Textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for this adjustment (e.g. damaged in transit, found extra stock, etc.)"
-            className="mt-1"
-            rows={2}
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 p-3 border-t bg-slate-50">
+        {/* Buttons */}
+        <div className="flex justify-between p-3 border-t-2 border-black">
           <Button variant="outline" onClick={goBack}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="gap-1 ml-auto bg-blue-600 hover:bg-blue-700">
+          <Button onClick={save} disabled={saving} className="gap-1 bg-blue-600 hover:bg-blue-700">
             <Save className="h-4 w-4" />
-            {saving ? 'Submitting...' : 'Submit for Approval'}
+            {saving ? 'Submitting...' : 'Submit For Approval'}
           </Button>
         </div>
       </div>
