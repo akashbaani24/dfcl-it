@@ -803,42 +803,63 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // For INCREASE (Excess), create new ItemSerial records so the
-          // stock page shows the new units. If a barcode was scanned,
-          // use it as both serial number and barcode.
+          // For INCREASE (Excess), ALWAYS create a new ItemSerial record
+          // so the stock page shows the new unit. Even if the barcode
+          // already exists, we create a new row with a unique serial number
+          // (ADJ-{barcode}-{timestamp}) so the same barcode can appear
+          // multiple times (e.g. 2 units with barcode 2607077235251).
           if (perItemEffect === 'INCREASE' && serials.length > 0) {
             for (const sn of serials) {
-              // Check if this serial/barcode already exists
+              // Check if this serial/barcode already exists AND is IN_STOCK
               const existing = await db.itemSerial.findFirst({
                 where: {
-                  OR: [
-                    { itemId: it.itemId, serialNumber: sn },
-                    { itemId: it.itemId, barcode: sn },
-                  ],
+                  itemId: it.itemId,
+                  barcode: sn,
+                  status: 'IN_STOCK',
                 },
               })
-              if (!existing) {
-                // Create a new ItemSerial — use the scanned value as both
-                // barcode and serial number (since adjustment doesn't have
-                // separate barcode/serial fields)
+              if (existing) {
+                // Barcode already exists as IN_STOCK — create a NEW ItemSerial
+                // with a unique serial number so we get a second row.
+                // This allows the same barcode to have qty > 1 in stock.
+                const adjSerial = `ADJ-${sn}-${Date.now()}`
                 await db.itemSerial.create({
                   data: {
                     itemId: it.itemId,
-                    serialNumber: sn,
-                    barcode: sn,
+                    serialNumber: adjSerial,
+                    barcode: sn,  // same barcode, different serial
                     entityId: adj.entityId,
                     status: 'IN_STOCK',
                   },
                 })
-                console.log(`[approve-adjustment] Created ItemSerial: ${sn}`)
+                console.log(`[approve-adjustment] Created duplicate ItemSerial: ${adjSerial} (barcode: ${sn})`)
               } else {
-                // If it exists but is DAMAGED/RETURNED, set back to IN_STOCK
-                if (existing.status !== 'IN_STOCK') {
+                // Check if it exists but is DAMAGED/RETURNED — restore it
+                const damaged = await db.itemSerial.findFirst({
+                  where: {
+                    itemId: it.itemId,
+                    barcode: sn,
+                    status: { in: ['DAMAGED', 'RETURNED', 'SOLD'] },
+                  },
+                })
+                if (damaged) {
                   await db.itemSerial.update({
-                    where: { id: existing.id },
+                    where: { id: damaged.id },
                     data: { status: 'IN_STOCK', entityId: adj.entityId },
                   })
                   console.log(`[approve-adjustment] Restored ItemSerial to IN_STOCK: ${sn}`)
+                } else {
+                  // Brand new — create with scanned value as both serial and barcode
+                  await db.itemSerial.create({
+                    data: {
+                      itemId: it.itemId,
+                      serialNumber: sn,
+                      barcode: sn,
+                      entityId: adj.entityId,
+                      status: 'IN_STOCK',
+                    },
+                  })
+                  console.log(`[approve-adjustment] Created new ItemSerial: ${sn}`)
                 }
               }
             }
