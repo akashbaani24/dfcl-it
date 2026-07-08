@@ -29,6 +29,7 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'internal-transfers', label: 'Internal Transfer', section: 'Inventory' },
   { key: 'internal-receive', label: 'Internal Receive', section: 'Inventory' },
   { key: 'adjustments', label: 'Adjustment', section: 'Inventory' },
+  { key: 'adjustment-approval', label: 'Adjustment Approval', section: 'Inventory' },
   // Sales
   { key: 'sales', label: 'Sales', section: 'Sales' },
   { key: 'sales-delivery', label: 'Sales Delivery', section: 'Sales' },
@@ -43,6 +44,11 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'reports-sales', label: 'Sales Report', section: 'Reports' },
   { key: 'reports-accounts', label: 'Accounts Report', section: 'Reports' },
   { key: 'reports-serial', label: 'Serial Status Report', section: 'Reports' },
+  // Tools
+  { key: 'barcode-print', label: 'Barcode Print', section: 'Tools' },
+  { key: 'qr-code-print', label: 'QR Code Print', section: 'Tools' },
+  // Admin
+  { key: 'manage-permissions', label: 'Manage Permissions', section: 'Admin' },
 ]
 
 export const PERMISSION_ACTIONS = [

@@ -1,7 +1,9 @@
 'use client'
 import { useApp } from '@/lib/store'
+import { useAuth } from '@/lib/auth-store'
+import { hasPermission, PermissionAction } from '@/lib/auth'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { SECTIONS } from './SidebarData'
 
@@ -22,6 +24,7 @@ const MODULE_TO_HASH: Record<string, string> = {
   'bank-infos': 'bank-infos',
   'purchase-requisitions': 'purchase-requisitions',
   purchases: 'purchases',
+  'purchase-approvals': 'purchase-approvals',
   'purchase-returns': 'purchase-returns',
   'purchase-receive': 'purchase-receive',
   'stock-all': 'stock-all',
@@ -29,6 +32,7 @@ const MODULE_TO_HASH: Record<string, string> = {
   'internal-transfers': 'internal-transfers',
   'internal-receive': 'internal-receive',
   adjustments: 'adjustments',
+  'adjustment-approval': 'adjustment-approval',
   sales: 'sales',
   'sales-delivery': 'sales-delivery',
   'sales-returns': 'sales-returns',
@@ -40,14 +44,33 @@ const MODULE_TO_HASH: Record<string, string> = {
   'reports-sales': 'reports-sales',
   'reports-accounts': 'reports-accounts',
   'reports-serial': 'reports-serial',
+  'barcode-print': 'barcode-print',
+  'qr-code-print': 'qr-code-print',
   'manage-permissions': 'manage-permissions',
 }
 
 export function Sidebar() {
   const { active, setActive, sidebarOpen } = useApp()
+  const { user } = useAuth()
   const [open, setOpen] = useState<Record<string, boolean>>(
-    Object.fromEntries(SECTIONS.map((s) => [s.title, true]))
+    Object.fromEntries(SECTIONS.map((s) => [s.title, s.defaultOpen ?? true]))
   )
+
+  // Check if user can view a module — non-admin users only see modules
+  // they have canView permission for. Admin sees everything.
+  const canViewModule = (moduleKey: string): boolean => {
+    if (!user) return false
+    if (user.role === 'ADMIN') return true
+    return hasPermission(user, moduleKey, 'canView' as PermissionAction)
+  }
+
+  // Filter sections: only show sections that have at least one visible item
+  const visibleSections = useMemo(() => {
+    return SECTIONS.map(sec => ({
+      ...sec,
+      items: sec.items.filter(item => canViewModule(item.key as string)),
+    })).filter(sec => sec.items.length > 0)
+  }, [user])
 
   if (!sidebarOpen) return null
 
@@ -56,7 +79,6 @@ export function Sidebar() {
     window.open(`${window.location.origin}${window.location.pathname}#${hash}`, '_blank')
   }
 
-  // Get href for a module (for right-click → Open in new tab)
   const getHref = (moduleKey: string) => {
     const hash = MODULE_TO_HASH[moduleKey] || moduleKey
     return `#${hash}`
@@ -74,7 +96,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-2 max-h-[calc(100vh-3.5rem)]">
-        {SECTIONS.map((sec) => {
+        {visibleSections.map((sec) => {
           const isOpen = open[sec.title]
           const Icon = sec.icon
           const anyActive = sec.items.some((i) => i.key === active)
@@ -102,7 +124,6 @@ export function Sidebar() {
                         key={item.key}
                         href={href}
                         onClick={(e) => {
-                          // Normal left-click → navigate in same tab
                           e.preventDefault()
                           setActive(item.key)
                         }}
@@ -115,7 +136,6 @@ export function Sidebar() {
                           <ItemIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1 text-left truncate">{item.label}</span>
                         </span>
-                        {/* Open in new tab icon — shows on hover */}
                         <span
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); openInNewTab(item.key as string) }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 hover:text-blue-500"
