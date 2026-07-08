@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Save, Plus, Trash2, ScanLine } from 'lucide-react'
-import { list, create, getOne } from '@/lib/api'
+import { list, create } from '@/lib/api'
 import { toast } from 'sonner'
 
 type AdjustType = 'EXCESS' | 'SHORTAGE' | 'REJECT' | 'WASTAGE'
@@ -83,6 +83,7 @@ export function AdjustmentEntryPage() {
         itemName: item.name,
         itemCode: item.itemCode || '',
         uom: item.uom?.shortCode || '',
+        // Auto-fill barcode and serial from the lookup result
         barcode: data.serial?.barcode || barcode.trim(),
         serialNumber: data.serial?.serialNumber || '',
         quantity: 1,
@@ -126,18 +127,19 @@ export function AdjustmentEntryPage() {
       const allExcess = [...types].every(t => t === 'EXCESS')
       const allDecrease = [...types].every(t => t !== 'EXCESS')
       const overallType = allExcess ? 'INCREASE' : allDecrease ? 'DECREASE' : 'MIXED'
-      const typeSummary = lines.map(l => `${l.itemName}:${l.adjustType}`).join(', ')
 
       const payload = {
         entityId,
         adjustDate: new Date(adjustDate + 'T00:00:00.000Z').toISOString(),
         type: overallType,
-        reason: reason ? `${reason} [${typeSummary}]` : typeSummary,
+        // User's reason only — no auto prefix
+        reason: reason || null,
         status: 'PENDING',
         items: {
           create: lines.map((l) => {
             const adjTypeDef = ADJUST_TYPES.find(t => t.value === l.adjustType)
             const effect = adjTypeDef?.effect || 'INCREASE'
+            // Encode adjust type in serials: ADJTYPE:EXCESS|EFFECT:INCREASE|barcode,serial
             const adjInfo = `ADJTYPE:${l.adjustType}|EFFECT:${effect}`
             const bcSn = [l.barcode, l.serialNumber].filter(Boolean).join(',')
             return {
@@ -191,13 +193,13 @@ export function AdjustmentEntryPage() {
           </div>
         </div>
 
-        {/* Reason */}
+        {/* Reason — user's text only */}
         <div className="p-3 border-b-2 border-black">
           <Label className="text-xs font-bold">Adjust Reason</Label>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for adjustment..."
+            placeholder="Type reason for this adjustment..."
             className="mt-1"
             rows={2}
           />

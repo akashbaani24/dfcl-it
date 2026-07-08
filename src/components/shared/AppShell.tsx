@@ -55,7 +55,7 @@ import { InternalReceiveEntryPage } from '@/components/modules/InternalReceiveEn
 import { BarcodePrintPage } from '@/components/modules/BarcodePrintPage'
 import { QRCodePrintPage } from '@/components/modules/QRCodePrintPage'
 import { AdjustmentEntryPage } from '@/components/modules/AdjustmentEntryPage'
-import { AdjustmentApprovalPage } from '@/components/modules/AdjustmentApprovalPage'
+import { AdjustmentApprovalPage, AdjustmentApprovalViewPage } from '@/components/modules/AdjustmentApprovalPage'
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 
@@ -115,6 +115,7 @@ export function AppShell() {
         'qr-code-print',
         'adjustment-entry',
         'adjustment-approval',
+        'adjustment-approval-view',
       ]
       if (validModules.includes(hash)) {
         setTimeout(() => useApp.getState().setActive(hash as any), 0)
@@ -508,6 +509,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'qr-code-print': return <QRCodePrintPage />
     case 'adjustment-entry': return <AdjustmentEntryPage />
     case 'adjustment-approval': return <AdjustmentApprovalPage />
+    case 'adjustment-approval-view': return <AdjustmentApprovalViewPage />
     case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />

@@ -12,7 +12,7 @@ export type ModuleKey =
   | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit' | 'account-types'
   | 'generic-add-edit' | 'bank-infos' | 'purchase-entry' | 'entity-selection'
   | 'sales-entry' | 'internal-transfer-entry' | 'internal-receive-entry' | 'barcode-print' | 'qr-code-print'
-  | 'adjustment-entry' | 'adjustment-approval'
+  | 'adjustment-entry' | 'adjustment-approval' | 'adjustment-approval-view'
 
 interface AppState {
   active: ModuleKey
