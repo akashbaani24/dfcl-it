@@ -59,7 +59,8 @@ export const SECTIONS: Section[] = [
       { key: 'stock-mine', label: 'My Entity Stock', icon: MapPin },
       { key: 'internal-transfers', label: 'Internal Transfer', icon: ArrowLeftRight },
       { key: 'internal-receive', label: 'Internal Receive', icon: PackageCheck },
-      { key: 'adjustments', label: 'Adjustment & Approval', icon: Sliders },
+      { key: 'adjustments', label: 'Adjustment', icon: Sliders },
+      { key: 'adjustment-approval', label: 'Adjustment Approval', icon: ClipboardCheck },
     ],
   },
   {
@@ -97,14 +98,6 @@ export const SECTIONS: Section[] = [
     items: [
       { key: 'barcode-print', label: 'Barcode Print', icon: Printer },
       { key: 'qr-code-print', label: 'QR Code Print', icon: QrCode },
-    ],
-  },
-  {
-    title: 'Approvals',
-    icon: ClipboardCheck,
-    defaultOpen: true,
-    items: [
-      { key: 'adjustment-approval', label: 'Adjustment Approval', icon: ClipboardCheck },
     ],
   },
 ]
