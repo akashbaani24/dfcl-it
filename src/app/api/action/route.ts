@@ -757,10 +757,35 @@ export async function POST(req: NextRequest) {
           include: { items: true },
         })
         if (!adj) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-        const sign = adj.type === 'INCREASE' ? 1 : -1
+
+        // Each item may have its own adjust type encoded in the serials field:
+        //   "ADJTYPE:EXCESS|EFFECT:INCREASE|barcode,serial"
+        //   "ADJTYPE:SHORTAGE|EFFECT:DECREASE|barcode,serial"
+        // We parse this to determine per-item INCREASE or DECREASE.
         for (const it of adj.items) {
-          const serials: string[] = it.serials ? it.serials.split(',').map((s: string) => s.trim()).filter(Boolean) : []
-          if (adj.type === 'DECREASE') {
+          // Parse the per-item effect from the serials field
+          let perItemEffect = adj.type === 'INCREASE' ? 'INCREASE' : 'DECREASE'
+          let actualSerials = it.serials || null
+
+          if (it.serials && it.serials.includes('ADJTYPE:')) {
+            // Format: "ADJTYPE:EXCESS|EFFECT:INCREASE|barcode,serial"
+            const parts = it.serials.split('|')
+            const effectPart = parts.find(p => p.startsWith('EFFECT:'))
+            if (effectPart) {
+              perItemEffect = effectPart.split(':')[1]
+            }
+            // Extract the actual barcode/serial part (after the last |)
+            const dataPart = parts.filter(p => !p.startsWith('ADJTYPE:') && !p.startsWith('EFFECT:'))
+            actualSerials = dataPart.length > 0 ? dataPart.join('|') : null
+          }
+
+          const sign = perItemEffect === 'INCREASE' ? 1 : -1
+          const serials: string[] = actualSerials
+            ? actualSerials.split(',').map((s: string) => s.trim()).filter(Boolean)
+            : []
+
+          // For DECREASE, mark serials as DAMAGED
+          if (perItemEffect === 'DECREASE') {
             for (const sn of serials) {
               const is = await db.itemSerial.findUnique({
                 where: { itemId_serialNumber: { itemId: it.itemId, serialNumber: sn } },
@@ -770,15 +795,16 @@ export async function POST(req: NextRequest) {
               }
             }
           }
+
           await db.stockTransaction.create({
             data: {
               itemId: it.itemId,
               entityId: adj.entityId,
-              type: adj.type === 'INCREASE' ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT',
+              type: perItemEffect === 'INCREASE' ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT',
               quantity: sign * Math.abs(it.quantity),
               refType: 'ADJUSTMENT',
               refId: adj.id,
-              serials: it.serials,
+              serials: actualSerials,
             },
           })
         }

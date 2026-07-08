@@ -22,6 +22,7 @@ type AdjustLine = {
   barcode: string
   serialNumber: string
   quantity: number
+  adjustType: AdjustType  // per-item adjust type
 }
 
 const ADJUST_TYPES: Array<{ value: AdjustType; label: string; desc: string; effect: string }> = [
@@ -92,6 +93,7 @@ export function AdjustmentEntryPage() {
         barcode: data.serial?.barcode || barcode.trim(),
         serialNumber: data.serial?.serialNumber || '',
         quantity: 1,
+        adjustType: adjustType,  // inherit from the header-level default
       }
       setLines([...lines, newLine])
       toast.success(`Added: ${item.name}`)
@@ -115,6 +117,7 @@ export function AdjustmentEntryPage() {
       id: Math.random().toString(36).slice(2),
       itemId: '', itemName: '', itemCode: '', uom: '',
       barcode: '', serialNumber: '', quantity: 1,
+      adjustType: adjustType,
     }])
   }
 
@@ -146,19 +149,38 @@ export function AdjustmentEntryPage() {
     savingRef.current = true
     setSaving(true)
     try {
-      const adjType = ADJUST_TYPES.find(t => t.value === adjustType)
+      // Determine overall type: if all items are EXCESS → INCREASE,
+      // if all are SHORTAGE/REJECT/WASTAGE → DECREASE,
+      // if mixed → MIXED
+      const types = new Set(lines.map(l => l.adjustType))
+      const allExcess = [...types].every(t => t === 'EXCESS')
+      const allDecrease = [...types].every(t => t !== 'EXCESS')
+      const overallType = allExcess ? 'INCREASE' : allDecrease ? 'DECREASE' : 'MIXED'
+
+      // Build a summary of per-item types for the reason field
+      const typeSummary = lines.map(l => `${l.itemName}:${l.adjustType}`).join(', ')
+
       const payload = {
         entityId,
         adjustDate: new Date(adjustDate + 'T00:00:00.000Z').toISOString(),
-        type: adjType?.effect || 'INCREASE',
-        reason: `${adjustType}: ${reason || '—'}`,
+        type: overallType,
+        reason: reason ? `${reason} [${typeSummary}]` : typeSummary,
         status: 'PENDING',
         items: {
-          create: lines.map((l) => ({
-            itemId: l.itemId,
-            quantity: l.quantity,
-            serials: l.barcode || l.serialNumber || null,
-          })),
+          create: lines.map((l) => {
+            const adjTypeDef = ADJUST_TYPES.find(t => t.value === l.adjustType)
+            const effect = adjTypeDef?.effect || 'INCREASE'
+            // Encode the per-item adjust type + effect in the serials field
+            // so the approval action knows how to handle each item.
+            // Format: "ADJTYPE:EXCESS|EFFECT:INCREASE|barcode|serial"
+            const adjInfo = `ADJTYPE:${l.adjustType}|EFFECT:${effect}`
+            const bcSn = [l.barcode, l.serialNumber].filter(Boolean).join(',')
+            return {
+              itemId: l.itemId,
+              quantity: l.quantity,
+              serials: bcSn ? `${adjInfo}|${bcSn}` : adjInfo,
+            }
+          }),
         },
       }
       await create('adjustments', payload)
@@ -207,7 +229,7 @@ export function AdjustmentEntryPage() {
             <Input type="date" value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)} className="mt-1 h-10" />
           </div>
           <div className="p-3">
-            <Label className="text-xs font-semibold">Adjust Type</Label>
+            <Label className="text-xs font-semibold">Default Adjust Type <span className="text-muted-foreground font-normal">(for new items)</span></Label>
             <div className="mt-1">
               <ComboBox
                 value={adjustType}
@@ -216,6 +238,9 @@ export function AdjustmentEntryPage() {
                 placeholder="Select type"
               />
             </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Each item can have its own type — change per row in the table below
+            </p>
           </div>
         </div>
 
@@ -259,6 +284,7 @@ export function AdjustmentEntryPage() {
                 <th className="px-3 py-2 text-left font-semibold text-xs w-28">Barcode</th>
                 <th className="px-3 py-2 text-left font-semibold text-xs w-28">Serial</th>
                 <th className="px-3 py-2 text-left font-semibold text-xs w-20">UoM</th>
+                <th className="px-3 py-2 text-left font-semibold text-xs w-32">Adjust Type</th>
                 <th className="px-3 py-2 text-left font-semibold text-xs w-24">Qty</th>
                 <th className="px-3 py-2 w-10"></th>
               </tr>
@@ -285,6 +311,17 @@ export function AdjustmentEntryPage() {
                   <td className="px-3 py-2 font-mono text-xs">{l.barcode || '—'}</td>
                   <td className="px-3 py-2 font-mono text-xs">{l.serialNumber || '—'}</td>
                   <td className="px-3 py-2 text-xs">{l.uom || '—'}</td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={l.adjustType}
+                      onChange={(e) => updateLine(l.id, { adjustType: e.target.value as AdjustType })}
+                      className="h-8 w-full text-xs border rounded px-1"
+                    >
+                      {ADJUST_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-3 py-2">
                     <Input
                       type="number"
