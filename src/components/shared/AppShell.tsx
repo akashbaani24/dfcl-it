@@ -193,11 +193,13 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Top bar */}
-      <header className="h-14 border-b flex items-center gap-2 px-3 sm:px-4 bg-card sticky top-0 z-40">
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
-          <Menu className="h-5 w-5" />
-        </Button>
+      {/* Sticky top section — header + news ticker stay fixed when scrolling */}
+      <div className="sticky top-0 z-40">
+        {/* Top bar */}
+        <header className="h-14 border-b flex items-center gap-2 px-3 sm:px-4 bg-card">
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </Button>
         {/* Desktop sidebar toggle — hides/shows the sidebar */}
         <Button variant="ghost" size="icon" className="hidden md:flex" onClick={toggleSidebarCollapsed} title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
           {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
@@ -255,9 +257,17 @@ export function AppShell() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
-              <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
-              </div>
+              {user.employee?.photo ? (
+                <img
+                  src={user.employee.photo}
+                  alt={user.employee?.name || user.userId}
+                  className="h-7 w-7 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                  {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:block text-left">
                 <div className="text-xs font-medium leading-tight">{user.employee?.name || user.userId}</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">
@@ -268,8 +278,23 @@ export function AppShell() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <div className="text-sm font-medium">{user.employee?.name || user.userId}</div>
-              <div className="text-xs text-muted-foreground font-normal">{user.employee?.designation || '—'}</div>
+              <div className="flex items-center gap-2 mb-1">
+                {user.employee?.photo ? (
+                  <img
+                    src={user.employee.photo}
+                    alt={user.employee?.name || user.userId}
+                    className="h-10 w-10 rounded-full object-cover border"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                    {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-medium">{user.employee?.name || user.userId}</div>
+                  <div className="text-xs text-muted-foreground font-normal">{user.employee?.designation || '—'}</div>
+                </div>
+              </div>
               <div className="text-xs text-muted-foreground font-normal">{user.employee?.email || user.userId}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -281,6 +306,7 @@ export function AppShell() {
       </header>
 
       <NewsTicker />
+      </div>{/* end sticky top section */}
 
       <div className="flex flex-1">
         {/* Desktop sidebar — hidden when sidebarCollapsed is true */}
