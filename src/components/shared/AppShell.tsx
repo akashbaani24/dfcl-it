@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useApp } from '@/lib/store'
 import { useAuth } from '@/lib/auth-store'
 import { Sidebar } from '@/components/shared/Sidebar'
@@ -11,53 +12,81 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Dashboard } from '@/components/modules/Dashboard'
-import { EntitiesPage } from '@/components/modules/EntitiesPage'
-import { DepartmentsPage } from '@/components/modules/DepartmentsPage'
-import { EmployeesPage } from '@/components/modules/EmployeesPage'
-import { UomsPage } from '@/components/modules/UomsPage'
-import { SuppliersPage } from '@/components/modules/SuppliersPage'
-import { CategoriesPage } from '@/components/modules/CategoriesPage'
-import { ItemsPage } from '@/components/modules/ItemsPage'
-import { ItemSerialsPage } from '@/components/modules/ItemSerialsPage'
-import { NewsTickerPage } from '@/components/modules/NewsTickerPage'
-import { PurchaseRequisitionsPage } from '@/components/modules/PurchaseRequisitionsPage'
-import { PurchasesPage } from '@/components/modules/PurchasesPage'
-import { PurchaseApprovalPage } from '@/components/modules/PurchaseApprovalPage'
-import { PurchaseReturnsPage } from '@/components/modules/PurchaseReturnsPage'
-import { PurchaseReceivePage } from '@/components/modules/PurchaseReceivePage'
-import { StockAllPage } from '@/components/modules/StockAllPage'
-import { StockMinePage } from '@/components/modules/StockMinePage'
-import { InternalTransfersPage } from '@/components/modules/InternalTransfersPage'
-import { InternalReceivePage } from '@/components/modules/InternalReceivePage'
-import { AdjustmentsPage } from '@/components/modules/AdjustmentsPage'
-import { SalesPage } from '@/components/modules/SalesPage'
-import { SalesDeliveryPage } from '@/components/modules/SalesDeliveryPage'
-import { SalesReturnsPage } from '@/components/modules/SalesReturnsPage'
-import { SalesRefundsPage } from '@/components/modules/SalesRefundsPage'
-import { AccountsExpensesPage } from '@/components/modules/AccountsExpensesPage'
-import { AccountsReceivePage } from '@/components/modules/AccountsReceivePage'
-import { ReportsStockPage } from '@/components/modules/ReportsStockPage'
-import { ReportsPurchasePage } from '@/components/modules/ReportsPurchasePage'
-import { ReportsSalesPage } from '@/components/modules/ReportsSalesPage'
-import { ReportsAccountsPage } from '@/components/modules/ReportsAccountsPage'
-import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
-import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPage'
-import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
-import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
-import { ItemEditPage } from '@/components/modules/ItemEditPage'
-import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
-import { BankInfosPage } from '@/components/modules/BankInfosPage'
-import { PurchaseEntryPage } from '@/components/modules/PurchaseEntryPage'
-import { SalesEntryPage } from '@/components/modules/SalesEntryPage'
-import { InternalTransferEntryPage } from '@/components/modules/InternalTransferEntryPage'
-import { InternalReceiveEntryPage } from '@/components/modules/InternalReceiveEntryPage'
-import { BarcodePrintPage } from '@/components/modules/BarcodePrintPage'
-import { QRCodePrintPage } from '@/components/modules/QRCodePrintPage'
-import { AdjustmentEntryPage } from '@/components/modules/AdjustmentEntryPage'
-import { AdjustmentApprovalPage, AdjustmentApprovalViewPage } from '@/components/modules/AdjustmentApprovalPage'
+// ---------------------------------------------------------------------------
+// Lazy-loaded module pages.
+//
+// Every module page is now a SEPARATE JavaScript chunk loaded on demand via
+// next/dynamic. Previously ALL ~45 modules were statically imported at the
+// top of this file, which meant the initial page-load bundle included the
+// code for every single screen (purchases, sales, reports, barcode printing,
+// permission manager, etc.) even though the user only sees one at a time.
+//
+// These modules are only ever rendered AFTER client-side auth + entity
+// resolution (see the early returns below for `loading` / `!user` /
+// `!selectedEntityId`), so they are never part of the server-rendered HTML.
+// That makes `ssr: false` safe here and avoids any hydration-mismatch risk
+// while giving us maximum code-splitting benefit: the first paint only needs
+// the Dashboard chunk.
+// ---------------------------------------------------------------------------
+function ModuleLoader() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+const dyn = (loader: () => Promise<any>) =>
+  dynamic(loader, { ssr: false, loading: ModuleLoader })
+
+const Dashboard = dyn(() => import('@/components/modules/Dashboard').then(m => ({ default: m.Dashboard })))
+const EntitiesPage = dyn(() => import('@/components/modules/EntitiesPage').then(m => ({ default: m.EntitiesPage })))
+const DepartmentsPage = dyn(() => import('@/components/modules/DepartmentsPage').then(m => ({ default: m.DepartmentsPage })))
+const EmployeesPage = dyn(() => import('@/components/modules/EmployeesPage').then(m => ({ default: m.EmployeesPage })))
+const UomsPage = dyn(() => import('@/components/modules/UomsPage').then(m => ({ default: m.UomsPage })))
+const SuppliersPage = dyn(() => import('@/components/modules/SuppliersPage').then(m => ({ default: m.SuppliersPage })))
+const CategoriesPage = dyn(() => import('@/components/modules/CategoriesPage').then(m => ({ default: m.CategoriesPage })))
+const ItemsPage = dyn(() => import('@/components/modules/ItemsPage').then(m => ({ default: m.ItemsPage })))
+const ItemSerialsPage = dyn(() => import('@/components/modules/ItemSerialsPage').then(m => ({ default: m.ItemSerialsPage })))
+const NewsTickerPage = dyn(() => import('@/components/modules/NewsTickerPage').then(m => ({ default: m.NewsTickerPage })))
+const PurchaseRequisitionsPage = dyn(() => import('@/components/modules/PurchaseRequisitionsPage').then(m => ({ default: m.PurchaseRequisitionsPage })))
+const PurchasesPage = dyn(() => import('@/components/modules/PurchasesPage').then(m => ({ default: m.PurchasesPage })))
+const PurchaseApprovalPage = dyn(() => import('@/components/modules/PurchaseApprovalPage').then(m => ({ default: m.PurchaseApprovalPage })))
+const PurchaseReturnsPage = dyn(() => import('@/components/modules/PurchaseReturnsPage').then(m => ({ default: m.PurchaseReturnsPage })))
+const PurchaseReceivePage = dyn(() => import('@/components/modules/PurchaseReceivePage').then(m => ({ default: m.PurchaseReceivePage })))
+const StockAllPage = dyn(() => import('@/components/modules/StockAllPage').then(m => ({ default: m.StockAllPage })))
+const StockMinePage = dyn(() => import('@/components/modules/StockMinePage').then(m => ({ default: m.StockMinePage })))
+const InternalTransfersPage = dyn(() => import('@/components/modules/InternalTransfersPage').then(m => ({ default: m.InternalTransfersPage })))
+const InternalReceivePage = dyn(() => import('@/components/modules/InternalReceivePage').then(m => ({ default: m.InternalReceivePage })))
+const AdjustmentsPage = dyn(() => import('@/components/modules/AdjustmentsPage').then(m => ({ default: m.AdjustmentsPage })))
+const SalesPage = dyn(() => import('@/components/modules/SalesPage').then(m => ({ default: m.SalesPage })))
+const SalesDeliveryPage = dyn(() => import('@/components/modules/SalesDeliveryPage').then(m => ({ default: m.SalesDeliveryPage })))
+const SalesReturnsPage = dyn(() => import('@/components/modules/SalesReturnsPage').then(m => ({ default: m.SalesReturnsPage })))
+const SalesRefundsPage = dyn(() => import('@/components/modules/SalesRefundsPage').then(m => ({ default: m.SalesRefundsPage })))
+const AccountsExpensesPage = dyn(() => import('@/components/modules/AccountsExpensesPage').then(m => ({ default: m.AccountsExpensesPage })))
+const AccountsReceivePage = dyn(() => import('@/components/modules/AccountsReceivePage').then(m => ({ default: m.AccountsReceivePage })))
+const ReportsStockPage = dyn(() => import('@/components/modules/ReportsStockPage').then(m => ({ default: m.ReportsStockPage })))
+const ReportsPurchasePage = dyn(() => import('@/components/modules/ReportsPurchasePage').then(m => ({ default: m.ReportsPurchasePage })))
+const ReportsSalesPage = dyn(() => import('@/components/modules/ReportsSalesPage').then(m => ({ default: m.ReportsSalesPage })))
+const ReportsAccountsPage = dyn(() => import('@/components/modules/ReportsAccountsPage').then(m => ({ default: m.ReportsAccountsPage })))
+const ReportsSerialPage = dyn(() => import('@/components/modules/ReportsSerialPage').then(m => ({ default: m.ReportsSerialPage })))
+const ManagePermissionsPage = dyn(() => import('@/components/modules/ManagePermissionsPage').then(m => ({ default: m.ManagePermissionsPage })))
+const EmployeeEditPage = dyn(() => import('@/components/modules/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })))
+const LoginSettingsPage = dyn(() => import('@/components/modules/LoginSettingsPage').then(m => ({ default: m.LoginSettingsPage })))
+const ItemEditPage = dyn(() => import('@/components/modules/ItemEditPage').then(m => ({ default: m.ItemEditPage })))
+const AccountTypesPage = dyn(() => import('@/components/modules/AccountTypesPage').then(m => ({ default: m.AccountTypesPage })))
+const BankInfosPage = dyn(() => import('@/components/modules/BankInfosPage').then(m => ({ default: m.BankInfosPage })))
+const PurchaseEntryPage = dyn(() => import('@/components/modules/PurchaseEntryPage').then(m => ({ default: m.PurchaseEntryPage })))
+const SalesEntryPage = dyn(() => import('@/components/modules/SalesEntryPage').then(m => ({ default: m.SalesEntryPage })))
+const InternalTransferEntryPage = dyn(() => import('@/components/modules/InternalTransferEntryPage').then(m => ({ default: m.InternalTransferEntryPage })))
+const InternalReceiveEntryPage = dyn(() => import('@/components/modules/InternalReceiveEntryPage').then(m => ({ default: m.InternalReceiveEntryPage })))
+const BarcodePrintPage = dyn(() => import('@/components/modules/BarcodePrintPage').then(m => ({ default: m.BarcodePrintPage })))
+const QRCodePrintPage = dyn(() => import('@/components/modules/QRCodePrintPage').then(m => ({ default: m.QRCodePrintPage })))
+const AdjustmentEntryPage = dyn(() => import('@/components/modules/AdjustmentEntryPage').then(m => ({ default: m.AdjustmentEntryPage })))
+const AdjustmentApprovalPage = dyn(() => import('@/components/modules/AdjustmentApprovalPage').then(m => ({ default: m.AdjustmentApprovalPage })))
+const AdjustmentApprovalViewPage = dyn(() => import('@/components/modules/AdjustmentApprovalPage').then(m => ({ default: m.AdjustmentApprovalViewPage })))
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
+// (module page imports below are lazy — see ModuleLoader / dyn helper)
 
 export function AppShell() {
   const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity, sidebarCollapsed, toggleSidebarCollapsed } = useApp()

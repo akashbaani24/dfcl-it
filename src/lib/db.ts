@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaLibSql } from '@prisma/adapter-libsql'
-import { createClient } from '@libsql/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -11,20 +10,23 @@ function createPrismaClient() {
   const tursoToken = process.env.TURSO_AUTH_TOKEN
 
   if (tursoUrl && tursoUrl.startsWith('libsql:') && tursoToken) {
-    // Optimized libsql client for high concurrency
-    const libsql = createClient({
+    // IMPORTANT: PrismaLibSql creates its OWN internal libsql client from the
+    // config we pass it. Previously we created a separate `createClient(...)`
+    // with tuned concurrency/keepalive settings but then THREW IT AWAY by
+    // passing only `{ url, authToken }` to the adapter — so none of the tuning
+    // actually took effect. Passing the full config here ensures the adapter's
+    // internal client benefits from the optimized settings.
+    const adapter = new PrismaLibSql({
       url: tursoUrl,
       authToken: tursoToken,
-      concurrency: 20,           // increased from 10 → 20 for more parallel queries
+      concurrency: 20,           // more parallel queries (default is 10)
       maxRetries: 3,             // retry on transient failures
       retryDelay: 100,           // 100ms initial retry delay
       syncInterval: 0,           // disable auto-sync (we don't use embedded replicas)
-      // Use HTTP/2 keep-alive for fewer connection overhead
       fetchOptions: {
-        keepalive: true,
+        keepalive: true,         // HTTP/2 keep-alive for fewer connection overhead
       },
     })
-    const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoToken })
     return new PrismaClient({ adapter, log: ['error'] })
   }
 

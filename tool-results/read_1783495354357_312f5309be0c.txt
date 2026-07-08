@@ -1,0 +1,978 @@
+     1→// Reports API — OPTIMIZED (batch queries, no N+1)
+     2→// GET /api/reports?type=stock-summary        -> per item/entity stock summary
+     3→// GET /api/reports?type=stock-ledger&itemId=  -> stock ledger for item
+     4→// GET /api/reports?type=purchase-summary     -> purchase totals per supplier/date
+     5→// GET /api/reports?type=sales-summary        -> sales totals per date/entity
+     6→// GET /api/reports?type=accounts-summary     -> expense vs receive summary
+     7→// GET /api/reports?type=serial-status        -> all item serials and their statuses
+     8→import { NextRequest, NextResponse } from 'next/server'
+     9→import { db } from '@/lib/db'
+    10→
+    11→export async function GET(req: NextRequest) {
+    12→  const { searchParams } = new URL(req.url)
+    13→  const type = searchParams.get('type')
+    14→
+    15→  try {
+    16→    switch (type) {
+    17→      case 'stock-summary': {
+    18→        // Single batch queries instead of nested loops
+    19→        const [entities, items] = await Promise.all([
+    20→          db.entity.findMany(),
+    21→          db.item.findMany({ include: { category: { include: { parent: true } }, uom: true } }),
+    22→        ])
+    23→        // Single groupBy for ALL transactions grouped by (entityId, itemId)
+    24→        const balancesRaw = await db.stockTransaction.groupBy({
+    25→          by: ['entityId', 'itemId'],
+    26→          _sum: { quantity: true },
+    27→        })
+    28→        const balanceMap: Record<string, number> = {}
+    29→        for (const b of balancesRaw) {
+    30→          balanceMap[`${b.entityId}|${b.itemId}`] = b._sum.quantity || 0
+    31→        }
+    32→        const rows = []
+    33→        for (const e of entities) {
+    34→          for (const item of items) {
+    35→            const balance = balanceMap[`${e.id}|${item.id}`] || 0
+    36→            if (balance !== 0) {
+    37→              rows.push({ entity: e, item, balance })
+    38→            }
+    39→          }
+    40→        }
+    41→        return NextResponse.json(rows)
+    42→      }
+    43→
+    44→      case 'stock-ledger': {
+    45→        const itemId = searchParams.get('itemId')!
+    46→        const entityId = searchParams.get('entityId') || undefined
+    47→        const where: any = { itemId }
+    48→        if (entityId) where.entityId = entityId
+    49→        const txs = await db.stockTransaction.findMany({
+    50→          where,
+    51→          include: { item: true, entity: true },
+    52→          orderBy: { createdAt: 'asc' },
+    53→        })
+    54→        let running = 0
+    55→        const rows = txs.map((t) => {
+    56→          running += t.quantity
+    57→          return { ...t, running }
+    58→        })
+    59→        return NextResponse.json(rows)
+    60→      }
+    61→
+    62→      case 'purchase-summary': {
+    63→        const purchases = await db.purchase.findMany({
+    64→          include: { supplier: true, entity: true, items: true },
+    65→        })
+    66→        const rows = purchases.map((p) => ({
+    67→          purchaseNo: p.purchaseNo,
+    68→          date: p.purchaseDate,
+    69→          entity: p.entity,
+    70→          supplier: p.supplier,
+    71→          total: p.totalAmount,
+    72→          status: p.status,
+    73→          itemCount: p.items.length,
+    74→        }))
+    75→        return NextResponse.json(rows)
+    76→      }
+    77→
+    78→      // ===== PURCHASE REPORTS (enhanced with date filter + report types) =====
+    79→
+    80→      case 'purchase-report': {
+    81→        // Query params:
+    82→        //   reportType: details | summary | supplier-wise | purchase-for |
+    83→        //               item-wise | category-wise | sub-category-wise
+    84→        //   range: daily | monthly | yearly | custom
+    85→        //   from: ISO date string (for custom range)
+    86→        //   to: ISO date string (for custom range)
+    87→        const reportType = searchParams.get('reportType') || 'details'
+    88→        const range = searchParams.get('range') || 'monthly'
+    89→        const from = searchParams.get('from')
+    90→        const to = searchParams.get('to')
+    91→
+    92→        // Build date filter based on range
+    93→        const dateWhere: any = {}
+    94→        const now = new Date()
+    95→        if (range === 'daily') {
+    96→          // Today only
+    97→          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    98→          dateWhere.gte = start
+    99→        } else if (range === 'monthly') {
+   100→          // Current month
+   101→          const start = new Date(now.getFullYear(), now.getMonth(), 1)
+   102→          dateWhere.gte = start
+   103→        } else if (range === 'yearly') {
+   104→          // Current year
+   105→          const start = new Date(now.getFullYear(), 0, 1)
+   106→          dateWhere.gte = start
+   107→        } else if (range === 'custom' && from && to) {
+   108→          dateWhere.gte = new Date(from)
+   109→          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+   110→        }
+   111→
+   112→        const purchases = await db.purchase.findMany({
+   113→          where: Object.keys(dateWhere).length > 0 ? { purchaseDate: dateWhere } : {},
+   114→          include: {
+   115→            supplier: true,
+   116→            entity: true,
+   117→            items: {
+   118→              include: {
+   119→                item: {
+   120→                  include: {
+   121→                    category: { include: { parent: true } },
+   122→                    uom: true,
+   123→                  },
+   124→                },
+   125→              },
+   126→            },
+   127→          },
+   128→          orderBy: { purchaseDate: 'desc' },
+   129→        })
+   130→
+   131→        if (reportType === 'details') {
+   132→          // Flat list: one row per item per purchase.
+   133→          // Columns: Sl, Purchase Date, Purchase ID, Purchase Receive ID,
+   134→          //          Purchase For, Supplier, Item Name, Model No, Size,
+   135→          //          Barcode, Serial Number, Qty, UoM, Unit Price, Total
+   136→          //
+   137→          // BARCODE + SERIAL CROSS-REFERENCE:
+   138→          //   The barcode and serial are NOT stored on PurchaseItem (they
+   139→          //   don't exist at purchase creation time). They are generated
+   140→          //   and stored on PurchaseReceiveItem when the purchase is
+   141→          //   received. So we look up all PurchaseReceiveItems that
+   142→          //   reference this PurchaseItem (via purchaseItemId) and collect
+   143→          //   their barcodes + serials.
+   144→          //
+   145→          //   If a purchase has NOT been received yet, the barcode and
+   146→          //   serial columns will show '—' (not received).
+   147→
+   148→          // Step 1: Collect all purchaseItem IDs from these purchases
+   149→          const allPurchaseItemIds: string[] = []
+   150→          for (const p of purchases) {
+   151→            for (const it of p.items) {
+   152→              allPurchaseItemIds.push(it.id)
+   153→            }
+   154→          }
+   155→
+   156→          // Step 2: Fetch all PurchaseReceiveItems that reference these
+   157→          // PurchaseItems. Also include the parent PurchaseReceive to get
+   158→          // the receiveNo.
+   159→          const receiveItems = allPurchaseItemIds.length > 0
+   160→            ? await db.purchaseReceiveItem.findMany({
+   161→                where: { purchaseItemId: { in: allPurchaseItemIds } },
+   162→                include: {
+   163→                  receive: { select: { id: true, receiveNo: true, status: true } },
+   164→                },
+   165→              })
+   166→            : []
+   167→
+   168→          // Step 3: Build a map: purchaseItemId → { receiveNos, barcodes, serials }
+   169→          const receiveMap: Record<string, { receiveNos: string[]; barcodes: string[]; serials: string[] }> = {}
+   170→          for (const ri of receiveItems) {
+   171→            const pid = ri.purchaseItemId
+   172→            if (!receiveMap[pid]) {
+   173→              receiveMap[pid] = { receiveNos: [], barcodes: [], serials: [] }
+   174→            }
+   175→            // Collect the receive number(s) for this purchase item
+   176→            if (ri.receive?.receiveNo && !receiveMap[pid].receiveNos.includes(ri.receive.receiveNo)) {
+   177→              receiveMap[pid].receiveNos.push(ri.receive.receiveNo)
+   178→            }
+   179→            // Collect barcodes (comma-separated → split into individual)
+   180→            if (ri.barcodes) {
+   181→              const bcs = ri.barcodes.split(',').map((b: string) => b.trim()).filter(Boolean)
+   182→              receiveMap[pid].barcodes.push(...bcs)
+   183→            }
+   184→            // Collect serials (comma-separated → split into individual)
+   185→            if (ri.serials) {
+   186→              const sns = ri.serials.split(',').map((s: string) => s.trim()).filter(Boolean)
+   187→              receiveMap[pid].serials.push(...sns)
+   188→            }
+   189→          }
+   190→
+   191→          // Step 4: Build the detail rows — ONE ROW PER UNIT (barcode/serial)
+   192→          // If a purchase item has 10 units received with 10 barcodes,
+   193→          // we create 10 rows (each with its own barcode + serial).
+   194→          // If not received yet, we create 1 row with qty=ordered and
+   195→          // barcode/serial = '— (not received)'.
+   196→          const detailRows: any[] = []
+   197→          let sl = 1
+   198→          for (const p of purchases) {
+   199→            for (const it of p.items) {
+   200→              const item = it.item
+   201→              const recvData = receiveMap[it.id] || { receiveNos: [], barcodes: [], serials: [] }
+   202→              const hasReceived = recvData.receiveNos.length > 0
+   203→
+   204→              if (hasReceived && recvData.barcodes.length > 0) {
+   205→                // Received with barcodes — create 1 row per barcode
+   206→                const numUnits = recvData.barcodes.length
+   207→                const unitPrice = it.unitPrice
+   208→                const unitTotal = it.unitPrice  // each unit's total = unit price
+   209→                for (let i = 0; i < numUnits; i++) {
+   210→                  detailRows.push({
+   211→                    sl: sl++,
+   212→                    purchaseNo: p.purchaseNo,
+   213→                    purchaseDate: p.purchaseDate,
+   214→                    purchaseId: p.purchaseNo,
+   215→                    receiveNo: recvData.receiveNos.join(', '),
+   216→                    purchaseFor: p.entity?.name || '—',
+   217→                    supplier: p.supplier?.name || '—',
+   218→                    itemName: item?.name || '—',
+   219→                    modelNo: item?.itemCode || '—',
+   220→                    size: item?.description || '—',
+   221→                    barcode: recvData.barcodes[i] || '—',
+   222→                    serialNumber: recvData.serials[i] || '—',
+   223→                    qty: 1,                          // 1 per row (per unit)
+   224→                    uom: item?.uom?.shortCode || '—',
+   225→                    unitPrice: unitPrice,
+   226→                    total: unitTotal,
+   227→                  })
+   228→                }
+   229→              } else if (hasReceived && recvData.serials.length > 0) {
+   230→                // Received with serials but no barcodes — 1 row per serial
+   231→                const numUnits = recvData.serials.length
+   232→                const unitPrice = it.unitPrice
+   233→                for (let i = 0; i < numUnits; i++) {
+   234→                  detailRows.push({
+   235→                    sl: sl++,
+   236→                    purchaseNo: p.purchaseNo,
+   237→                    purchaseDate: p.purchaseDate,
+   238→                    purchaseId: p.purchaseNo,
+   239→                    receiveNo: recvData.receiveNos.join(', '),
+   240→                    purchaseFor: p.entity?.name || '—',
+   241→                    supplier: p.supplier?.name || '—',
+   242→                    itemName: item?.name || '—',
+   243→                    modelNo: item?.itemCode || '—',
+   244→                    size: item?.description || '—',
+   245→                    barcode: '—',
+   246→                    serialNumber: recvData.serials[i] || '—',
+   247→                    qty: 1,
+   248→                    uom: item?.uom?.shortCode || '—',
+   249→                    unitPrice: unitPrice,
+   250→                    total: unitPrice,
+   251→                  })
+   252→                }
+   253→              } else {
+   254→                // Not received yet — 1 row with full qty
+   255→                detailRows.push({
+   256→                  sl: sl++,
+   257→                  purchaseNo: p.purchaseNo,
+   258→                  purchaseDate: p.purchaseDate,
+   259→                  purchaseId: p.purchaseNo,
+   260→                  receiveNo: '— (not received)',
+   261→                  purchaseFor: p.entity?.name || '—',
+   262→                  supplier: p.supplier?.name || '—',
+   263→                  itemName: item?.name || '—',
+   264→                  modelNo: item?.itemCode || '—',
+   265→                  size: item?.description || '—',
+   266→                  barcode: '— (not received)',
+   267→                  serialNumber: '— (not received)',
+   268→                  qty: it.quantity,
+   269→                  uom: item?.uom?.shortCode || '—',
+   270→                  unitPrice: it.unitPrice,
+   271→                  total: it.totalPrice,
+   272→                })
+   273→              }
+   274→            }
+   275→          }
+   276→          return NextResponse.json({
+   277→            reportType: 'details',
+   278→            range,
+   279→            from: dateWhere.gte,
+   280→            to: dateWhere.lte,
+   281→            rows: detailRows,
+   282→            totalQty: detailRows.reduce((s, r) => s + r.qty, 0),
+   283→            totalAmount: detailRows.reduce((s, r) => s + r.total, 0),
+   284→          })
+   285→        }
+   286→
+   287→        if (reportType === 'summary') {
+   288→          // One row per purchase
+   289→          const summaryRows = purchases.map((p, i) => ({
+   290→            sl: i + 1,
+   291→            purchaseNo: p.purchaseNo,
+   292→            purchaseDate: p.purchaseDate,
+   293→            purchaseFor: p.entity?.name || '—',
+   294→            supplier: p.supplier?.name || '—',
+   295→            itemCount: p.items.length,
+   296→            totalQty: p.items.reduce((s: number, it: any) => s + it.quantity, 0),
+   297→            totalAmount: p.totalAmount,
+   298→            status: p.status,
+   299→          }))
+   300→          return NextResponse.json({
+   301→            reportType: 'summary',
+   302→            range,
+   303→            from: dateWhere.gte,
+   304→            to: dateWhere.lte,
+   305→            rows: summaryRows,
+   306→            totalAmount: summaryRows.reduce((s, r) => s + r.totalAmount, 0),
+   307→          })
+   308→        }
+   309→
+   310→        if (reportType === 'supplier-wise') {
+   311→          // Group by supplier
+   312→          const bySupplier: Record<string, any> = {}
+   313→          for (const p of purchases) {
+   314→            const key = p.supplier?.name || 'Unknown'
+   315→            if (!bySupplier[key]) {
+   316→              bySupplier[key] = {
+   317→                supplier: key,
+   318→                purchaseCount: 0,
+   319→                totalQty: 0,
+   320→                totalAmount: 0,
+   321→              }
+   322→            }
+   323→            bySupplier[key].purchaseCount++
+   324→            bySupplier[key].totalQty += p.items.reduce((s: number, it: any) => s + it.quantity, 0)
+   325→            bySupplier[key].totalAmount += p.totalAmount
+   326→          }
+   327→          const supplierRows = Object.values(bySupplier).map((r: any, i: number) => ({
+   328→            sl: i + 1,
+   329→            ...r,
+   330→          }))
+   331→          return NextResponse.json({
+   332→            reportType: 'supplier-wise',
+   333→            range,
+   334→            from: dateWhere.gte,
+   335→            to: dateWhere.lte,
+   336→            rows: supplierRows,
+   337→            totalAmount: supplierRows.reduce((s, r) => s + r.totalAmount, 0),
+   338→          })
+   339→        }
+   340→
+   341→        if (reportType === 'purchase-for') {
+   342→          // Group by entity (Purchase For)
+   343→          const byEntity: Record<string, any> = {}
+   344→          for (const p of purchases) {
+   345→            const key = p.entity?.name || 'Unknown'
+   346→            if (!byEntity[key]) {
+   347→              byEntity[key] = {
+   348→                purchaseFor: key,
+   349→                purchaseCount: 0,
+   350→                totalQty: 0,
+   351→                totalAmount: 0,
+   352→              }
+   353→            }
+   354→            byEntity[key].purchaseCount++
+   355→            byEntity[key].totalQty += p.items.reduce((s: number, it: any) => s + it.quantity, 0)
+   356→            byEntity[key].totalAmount += p.totalAmount
+   357→          }
+   358→          const entityRows = Object.values(byEntity).map((r: any, i: number) => ({
+   359→            sl: i + 1,
+   360→            ...r,
+   361→          }))
+   362→          return NextResponse.json({
+   363→            reportType: 'purchase-for',
+   364→            range,
+   365→            from: dateWhere.gte,
+   366→            to: dateWhere.lte,
+   367→            rows: entityRows,
+   368→            totalAmount: entityRows.reduce((s, r) => s + r.totalAmount, 0),
+   369→          })
+   370→        }
+   371→
+   372→        if (reportType === 'item-wise') {
+   373→          // Group by item
+   374→          const byItem: Record<string, any> = {}
+   375→          for (const p of purchases) {
+   376→            for (const it of p.items) {
+   377→              const key = it.item?.name || 'Unknown'
+   378→              if (!byItem[key]) {
+   379→                byItem[key] = {
+   380→                  itemName: key,
+   381→                  modelNo: it.item?.itemCode || '—',
+   382→                  uom: it.item?.uom?.shortCode || '—',
+   383→                  qty: 0,
+   384→                  totalAmount: 0,
+   385→                  purchaseCount: 0,
+   386→                }
+   387→              }
+   388→              byItem[key].qty += it.quantity
+   389→              byItem[key].totalAmount += it.totalPrice
+   390→              byItem[key].purchaseCount++
+   391→            }
+   392→          }
+   393→          const itemRows = Object.values(byItem).map((r: any, i: number) => ({
+   394→            sl: i + 1,
+   395→            ...r,
+   396→          }))
+   397→          return NextResponse.json({
+   398→            reportType: 'item-wise',
+   399→            range,
+   400→            from: dateWhere.gte,
+   401→            to: dateWhere.lte,
+   402→            rows: itemRows,
+   403→            totalQty: itemRows.reduce((s, r) => s + r.qty, 0),
+   404→            totalAmount: itemRows.reduce((s, r) => s + r.totalAmount, 0),
+   405→          })
+   406→        }
+   407→
+   408→        if (reportType === 'category-wise') {
+   409→          // Group by category (top-level)
+   410→          const byCategory: Record<string, any> = {}
+   411→          for (const p of purchases) {
+   412→            for (const it of p.items) {
+   413→              const cat = it.item?.category
+   414→              // Top-level category = category's parent or itself if no parent
+   415→              const topCat = cat?.parent?.name || cat?.name || 'Uncategorized'
+   416→              if (!byCategory[topCat]) {
+   417→                byCategory[topCat] = {
+   418→                  category: topCat,
+   419→                  qty: 0,
+   420→                  totalAmount: 0,
+   421→                  itemCount: 0,
+   422→                }
+   423→              }
+   424→              byCategory[topCat].qty += it.quantity
+   425→              byCategory[topCat].totalAmount += it.totalPrice
+   426→              byCategory[topCat].itemCount++
+   427→            }
+   428→          }
+   429→          const catRows = Object.values(byCategory).map((r: any, i: number) => ({
+   430→            sl: i + 1,
+   431→            ...r,
+   432→          }))
+   433→          return NextResponse.json({
+   434→            reportType: 'category-wise',
+   435→            range,
+   436→            from: dateWhere.gte,
+   437→            to: dateWhere.lte,
+   438→            rows: catRows,
+   439→            totalAmount: catRows.reduce((s, r) => s + r.totalAmount, 0),
+   440→          })
+   441→        }
+   442→
+   443→        if (reportType === 'sub-category-wise') {
+   444→          // Group by sub-category (the category itself, including its parent)
+   445→          const bySubCat: Record<string, any> = {}
+   446→          for (const p of purchases) {
+   447→            for (const it of p.items) {
+   448→              const cat = it.item?.category
+   449→              const subCatName = cat?.name || 'Uncategorized'
+   450→              const parentName = cat?.parent?.name || '—'
+   451→              const key = `${parentName} > ${subCatName}`
+   452→              if (!bySubCat[key]) {
+   453→                bySubCat[key] = {
+   454→                  category: parentName,
+   455→                  subCategory: subCatName,
+   456→                  qty: 0,
+   457→                  totalAmount: 0,
+   458→                  itemCount: 0,
+   459→                }
+   460→              }
+   461→              bySubCat[key].qty += it.quantity
+   462→              bySubCat[key].totalAmount += it.totalPrice
+   463→              bySubCat[key].itemCount++
+   464→            }
+   465→          }
+   466→          const subCatRows = Object.values(bySubCat).map((r: any, i: number) => ({
+   467→            sl: i + 1,
+   468→            ...r,
+   469→          }))
+   470→          return NextResponse.json({
+   471→            reportType: 'sub-category-wise',
+   472→            range,
+   473→            from: dateWhere.gte,
+   474→            to: dateWhere.lte,
+   475→            rows: subCatRows,
+   476→            totalAmount: subCatRows.reduce((s, r) => s + r.totalAmount, 0),
+   477→          })
+   478→        }
+   479→
+   480→        return NextResponse.json({ error: 'Unknown reportType' }, { status: 400 })
+   481→      }
+   482→
+   483→      case 'sales-summary': {
+   484→        const sales = await db.sales.findMany({
+   485→          include: { entity: true, items: true },
+   486→        })
+   487→        const rows = sales.map((s) => ({
+   488→          salesNo: s.salesNo,
+   489→          date: s.salesDate,
+   490→          entity: s.entity,
+   491→          customer: s.customerName,
+   492→          total: s.totalAmount,
+   493→          paid: s.paidAmount,
+   494→          status: s.status,
+   495→          deliveryStatus: s.deliveryStatus,
+   496→          itemCount: s.items.length,
+   497→        }))
+   498→        return NextResponse.json(rows)
+   499→      }
+   500→
+   501→      case 'accounts-summary': {
+   502→        const entries = await db.accountEntry.findMany({ include: { entity: true } })
+   503→        const totalExpense = entries.filter((e) => e.type === 'EXPENSE').reduce((s, e) => s + e.amount, 0)
+   504→        const totalReceive = entries.filter((e) => e.type === 'RECEIVE').reduce((s, e) => s + e.amount, 0)
+   505→        const byCategory: Record<string, { expense: number; receive: number }> = {}
+   506→        for (const e of entries) {
+   507→          if (!byCategory[e.category]) byCategory[e.category] = { expense: 0, receive: 0 }
+   508→          if (e.type === 'EXPENSE') byCategory[e.category].expense += e.amount
+   509→          else byCategory[e.category].receive += e.amount
+   510→        }
+   511→        return NextResponse.json({
+   512→          totalExpense, totalReceive, net: totalReceive - totalExpense,
+   513→          byCategory, entries,
+   514→        })
+   515→      }
+   516→
+   517→      case 'serial-status': {
+   518→        const serials = await db.itemSerial.findMany({
+   519→          include: { item: { include: { category: true } }, entity: true },
+   520→          orderBy: { createdAt: 'desc' },
+   521→        })
+   522→        return NextResponse.json(serials)
+   523→      }
+   524→
+   525→      // ===== SALES REPORT (enhanced with date filter + report types) =====
+   526→      case 'sales-report': {
+   527→        const reportType = searchParams.get('reportType') || 'summary'
+   528→        const range = searchParams.get('range') || 'monthly'
+   529→        const from = searchParams.get('from')
+   530→        const to = searchParams.get('to')
+   531→
+   532→        const dateWhere: any = {}
+   533→        const now = new Date()
+   534→        if (range === 'daily') {
+   535→          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+   536→        } else if (range === 'monthly') {
+   537→          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), 1)
+   538→        } else if (range === 'yearly') {
+   539→          dateWhere.gte = new Date(now.getFullYear(), 0, 1)
+   540→        } else if (range === 'custom' && from && to) {
+   541→          dateWhere.gte = new Date(from)
+   542→          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+   543→        }
+   544→
+   545→        const sales = await db.sales.findMany({
+   546→          where: Object.keys(dateWhere).length > 0 ? { salesDate: dateWhere } : {},
+   547→          include: {
+   548→            entity: true,
+   549→            items: {
+   550→              include: {
+   551→                item: { include: { category: { include: { parent: true } }, uom: true } },
+   552→              },
+   553→            },
+   554→          },
+   555→          orderBy: { salesDate: 'desc' },
+   556→        })
+   557→
+   558→        if (reportType === 'summary') {
+   559→          const summaryRows = sales.map((s, i) => ({
+   560→            sl: i + 1,
+   561→            salesNo: s.salesNo,
+   562→            salesDate: s.salesDate,
+   563→            entity: s.entity?.name || '—',
+   564→            customer: s.customerName,
+   565→            customerPhone: s.customerPhone || '—',
+   566→            itemCount: s.items.length,
+   567→            totalQty: s.items.reduce((s2: number, it: any) => s2 + it.quantity, 0),
+   568→            totalAmount: s.totalAmount,
+   569→            paidAmount: s.paidAmount,
+   570→            due: s.totalAmount - s.paidAmount,
+   571→            status: s.status,
+   572→            deliveryStatus: s.deliveryStatus,
+   573→          }))
+   574→          return NextResponse.json({
+   575→            reportType: 'summary', range, from: dateWhere.gte, to: dateWhere.lte,
+   576→            rows: summaryRows,
+   577→            totalAmount: summaryRows.reduce((s, r) => s + r.totalAmount, 0),
+   578→            totalPaid: summaryRows.reduce((s, r) => s + r.paidAmount, 0),
+   579→          })
+   580→        }
+   581→
+   582→        if (reportType === 'customer-wise') {
+   583→          const byCustomer: Record<string, any> = {}
+   584→          for (const s of sales) {
+   585→            const key = s.customerName || 'Unknown'
+   586→            if (!byCustomer[key]) byCustomer[key] = { customer: key, phone: s.customerPhone, salesCount: 0, totalAmount: 0, totalPaid: 0 }
+   587→            byCustomer[key].salesCount++
+   588→            byCustomer[key].totalAmount += s.totalAmount
+   589→            byCustomer[key].totalPaid += s.paidAmount
+   590→          }
+   591→          const rows = Object.values(byCustomer).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   592→          return NextResponse.json({
+   593→            reportType: 'customer-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   594→            rows,
+   595→            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+   596→          })
+   597→        }
+   598→
+   599→        if (reportType === 'entity-wise') {
+   600→          const byEntity: Record<string, any> = {}
+   601→          for (const s of sales) {
+   602→            const key = s.entity?.name || 'Unknown'
+   603→            if (!byEntity[key]) byEntity[key] = { entity: key, salesCount: 0, totalAmount: 0, totalPaid: 0 }
+   604→            byEntity[key].salesCount++
+   605→            byEntity[key].totalAmount += s.totalAmount
+   606→            byEntity[key].totalPaid += s.paidAmount
+   607→          }
+   608→          const rows = Object.values(byEntity).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   609→          return NextResponse.json({
+   610→            reportType: 'entity-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   611→            rows,
+   612→            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+   613→          })
+   614→        }
+   615→
+   616→        if (reportType === 'item-wise') {
+   617→          const byItem: Record<string, any> = {}
+   618→          for (const s of sales) {
+   619→            for (const it of s.items) {
+   620→              const key = it.item?.name || 'Unknown'
+   621→              if (!byItem[key]) byItem[key] = { itemName: key, modelNo: it.item?.itemCode, uom: it.item?.uom?.shortCode, qty: 0, totalAmount: 0, salesCount: 0 }
+   622→              byItem[key].qty += it.quantity
+   623→              byItem[key].totalAmount += it.totalPrice
+   624→              byItem[key].salesCount++
+   625→            }
+   626→          }
+   627→          const rows = Object.values(byItem).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   628→          return NextResponse.json({
+   629→            reportType: 'item-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   630→            rows,
+   631→            totalQty: rows.reduce((s, r) => s + r.qty, 0),
+   632→            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+   633→          })
+   634→        }
+   635→
+   636→        if (reportType === 'category-wise') {
+   637→          const byCat: Record<string, any> = {}
+   638→          for (const s of sales) {
+   639→            for (const it of s.items) {
+   640→              const cat = it.item?.category
+   641→              const topCat = cat?.parent?.name || cat?.name || 'Uncategorized'
+   642→              if (!byCat[topCat]) byCat[topCat] = { category: topCat, qty: 0, totalAmount: 0, itemCount: 0 }
+   643→              byCat[topCat].qty += it.quantity
+   644→              byCat[topCat].totalAmount += it.totalPrice
+   645→              byCat[topCat].itemCount++
+   646→            }
+   647→          }
+   648→          const rows = Object.values(byCat).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   649→          return NextResponse.json({
+   650→            reportType: 'category-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   651→            rows,
+   652→            totalAmount: rows.reduce((s, r) => s + r.totalAmount, 0),
+   653→          })
+   654→        }
+   655→
+   656→        return NextResponse.json({ error: 'Unknown reportType for sales-report. Available: summary, customer-wise, entity-wise, item-wise, category-wise' }, { status: 400 })
+   657→      }
+   658→
+   659→      // ===== STOCK REPORT =====
+   660→      case 'stock-report': {
+   661→        const reportType = searchParams.get('reportType') || 'summary'
+   662→
+   663→        const [entities, items] = await Promise.all([
+   664→          db.entity.findMany(),
+   665→          db.item.findMany({ include: { category: { include: { parent: true } }, uom: true } }),
+   666→        ])
+   667→        const balancesRaw = await db.stockTransaction.groupBy({
+   668→          by: ['entityId', 'itemId'],
+   669→          _sum: { quantity: true },
+   670→        })
+   671→        const balanceMap: Record<string, number> = {}
+   672→        for (const b of balancesRaw) {
+   673→          balanceMap[`${b.entityId}|${b.itemId}`] = b._sum.quantity || 0
+   674→        }
+   675→
+   676→        if (reportType === 'summary') {
+   677→          // One row per item with total stock across all entities
+   678→          const rows = items.map((item, i) => {
+   679→            let totalBalance = 0
+   680→            for (const e of entities) {
+   681→              totalBalance += balanceMap[`${e.id}|${item.id}`] || 0
+   682→            }
+   683→            return {
+   684→              sl: i + 1,
+   685→              itemName: item.name,
+   686→              itemCode: item.itemCode,
+   687→              category: item.category?.parent?.name || item.category?.name || '—',
+   688→              uom: item.uom?.shortCode || '—',
+   689→              totalStock: totalBalance,
+   690→            }
+   691→          }).filter(r => r.totalStock !== 0)
+   692→          return NextResponse.json({
+   693→            reportType: 'summary', range: 'all',
+   694→            rows,
+   695→            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+   696→          })
+   697→        }
+   698→
+   699→        if (reportType === 'entity-wise') {
+   700→          // One row per entity + item
+   701→          const rows: any[] = []
+   702→          let sl = 1
+   703→          for (const e of entities) {
+   704→            for (const item of items) {
+   705→              const balance = balanceMap[`${e.id}|${item.id}`] || 0
+   706→              if (balance !== 0) {
+   707→                rows.push({
+   708→                  sl: sl++,
+   709→                  entity: e.name,
+   710→                  itemName: item.name,
+   711→                  itemCode: item.itemCode,
+   712→                  category: item.category?.parent?.name || item.category?.name || '—',
+   713→                  uom: item.uom?.shortCode || '—',
+   714→                  stock: balance,
+   715→                })
+   716→              }
+   717→            }
+   718→          }
+   719→          return NextResponse.json({
+   720→            reportType: 'entity-wise', range: 'all',
+   721→            rows,
+   722→            totalStock: rows.reduce((s, r) => s + r.stock, 0),
+   723→          })
+   724→        }
+   725→
+   726→        if (reportType === 'category-wise') {
+   727→          const byCat: Record<string, any> = {}
+   728→          for (const item of items) {
+   729→            const cat = item.category
+   730→            const topCat = cat?.parent?.name || cat?.name || 'Uncategorized'
+   731→            let totalBalance = 0
+   732→            for (const e of entities) {
+   733→              totalBalance += balanceMap[`${e.id}|${item.id}`] || 0
+   734→            }
+   735→            if (totalBalance !== 0) {
+   736→              if (!byCat[topCat]) byCat[topCat] = { category: topCat, itemCount: 0, totalStock: 0 }
+   737→              byCat[topCat].itemCount++
+   738→              byCat[topCat].totalStock += totalBalance
+   739→            }
+   740→          }
+   741→          const rows = Object.values(byCat).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   742→          return NextResponse.json({
+   743→            reportType: 'category-wise', range: 'all',
+   744→            rows,
+   745→            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+   746→          })
+   747→        }
+   748→
+   749→        if (reportType === 'item-wise') {
+   750→          // Same as summary but grouped differently
+   751→          const rows = items.map((item, i) => {
+   752→            let totalBalance = 0
+   753→            const entityStocks: any[] = []
+   754→            for (const e of entities) {
+   755→              const bal = balanceMap[`${e.id}|${item.id}`] || 0
+   756→              if (bal !== 0) {
+   757→                totalBalance += bal
+   758→                entityStocks.push({ entity: e.name, stock: bal })
+   759→              }
+   760→            }
+   761→            return {
+   762→              sl: i + 1,
+   763→              itemName: item.name,
+   764→              itemCode: item.itemCode,
+   765→              uom: item.uom?.shortCode || '—',
+   766→              totalStock: totalBalance,
+   767→              entities: entityStocks,
+   768→            }
+   769→          }).filter(r => r.totalStock !== 0)
+   770→          return NextResponse.json({
+   771→            reportType: 'item-wise', range: 'all',
+   772→            rows,
+   773→            totalStock: rows.reduce((s, r) => s + r.totalStock, 0),
+   774→          })
+   775→        }
+   776→
+   777→        return NextResponse.json({ error: 'Unknown reportType for stock-report. Available: summary, entity-wise, category-wise, item-wise' }, { status: 400 })
+   778→      }
+   779→
+   780→      // ===== ACCOUNTS REPORT =====
+   781→      case 'accounts-report': {
+   782→        const reportType = searchParams.get('reportType') || 'summary'
+   783→        const range = searchParams.get('range') || 'monthly'
+   784→        const from = searchParams.get('from')
+   785→        const to = searchParams.get('to')
+   786→
+   787→        const dateWhere: any = {}
+   788→        const now = new Date()
+   789→        if (range === 'daily') {
+   790→          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+   791→        } else if (range === 'monthly') {
+   792→          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), 1)
+   793→        } else if (range === 'yearly') {
+   794→          dateWhere.gte = new Date(now.getFullYear(), 0, 1)
+   795→        } else if (range === 'custom' && from && to) {
+   796→          dateWhere.gte = new Date(from)
+   797→          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+   798→        }
+   799→
+   800→        const entries = await db.accountEntry.findMany({
+   801→          where: Object.keys(dateWhere).length > 0 ? { date: dateWhere } : {},
+   802→          include: { entity: true },
+   803→          orderBy: { date: 'desc' },
+   804→        })
+   805→
+   806→        if (reportType === 'summary') {
+   807→          const rows = entries.map((e, i) => ({
+   808→            sl: i + 1,
+   809→            entryNo: e.entryNo,
+   810→            date: e.date,
+   811→            entity: e.entity?.name || '—',
+   812→            type: e.type,
+   813→            category: e.category,
+   814→            amount: e.amount,
+   815→            method: e.method,
+   816→            description: e.description || '—',
+   817→          }))
+   818→          return NextResponse.json({
+   819→            reportType: 'summary', range, from: dateWhere.gte, to: dateWhere.lte,
+   820→            rows,
+   821→            totalExpense: entries.filter(e => e.type === 'EXPENSE').reduce((s, e) => s + e.amount, 0),
+   822→            totalReceive: entries.filter(e => e.type === 'RECEIVE').reduce((s, e) => s + e.amount, 0),
+   823→          })
+   824→        }
+   825→
+   826→        if (reportType === 'category-wise') {
+   827→          const byCat: Record<string, any> = {}
+   828→          for (const e of entries) {
+   829→            const key = e.category
+   830→            if (!byCat[key]) byCat[key] = { category: key, expense: 0, receive: 0, count: 0 }
+   831→            if (e.type === 'EXPENSE') byCat[key].expense += e.amount
+   832→            else byCat[key].receive += e.amount
+   833→            byCat[key].count++
+   834→          }
+   835→          const rows = Object.values(byCat).map((r: any, i: number) => ({
+   836→            sl: i + 1, ...r,
+   837→            net: r.receive - r.expense,
+   838→          }))
+   839→          return NextResponse.json({
+   840→            reportType: 'category-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   841→            rows,
+   842→            totalExpense: rows.reduce((s, r) => s + r.expense, 0),
+   843→            totalReceive: rows.reduce((s, r) => s + r.receive, 0),
+   844→          })
+   845→        }
+   846→
+   847→        if (reportType === 'entity-wise') {
+   848→          const byEntity: Record<string, any> = {}
+   849→          for (const e of entries) {
+   850→            const key = e.entity?.name || 'Unknown'
+   851→            if (!byEntity[key]) byEntity[key] = { entity: key, expense: 0, receive: 0, count: 0 }
+   852→            if (e.type === 'EXPENSE') byEntity[key].expense += e.amount
+   853→            else byEntity[key].receive += e.amount
+   854→            byEntity[key].count++
+   855→          }
+   856→          const rows = Object.values(byEntity).map((r: any, i: number) => ({
+   857→            sl: i + 1, ...r,
+   858→            net: r.receive - r.expense,
+   859→          }))
+   860→          return NextResponse.json({
+   861→            reportType: 'entity-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   862→            rows,
+   863→            totalExpense: rows.reduce((s, r) => s + r.expense, 0),
+   864→            totalReceive: rows.reduce((s, r) => s + r.receive, 0),
+   865→          })
+   866→        }
+   867→
+   868→        if (reportType === 'type-wise') {
+   869→          const expense = entries.filter(e => e.type === 'EXPENSE')
+   870→          const receive = entries.filter(e => e.type === 'RECEIVE')
+   871→          const rows = [
+   872→            { sl: 1, type: 'EXPENSE', count: expense.length, total: expense.reduce((s, e) => s + e.amount, 0) },
+   873→            { sl: 2, type: 'RECEIVE', count: receive.length, total: receive.reduce((s, e) => s + e.amount, 0) },
+   874→          ]
+   875→          return NextResponse.json({
+   876→            reportType: 'type-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+   877→            rows,
+   878→            totalExpense: rows[0].total,
+   879→            totalReceive: rows[1].total,
+   880→          })
+   881→        }
+   882→
+   883→        return NextResponse.json({ error: 'Unknown reportType for accounts-report. Available: summary, category-wise, entity-wise, type-wise' }, { status: 400 })
+   884→      }
+   885→
+   886→      // ===== SERIAL STATUS REPORT =====
+   887→      case 'serial-report': {
+   888→        const reportType = searchParams.get('reportType') || 'status-wise'
+   889→
+   890→        const serials = await db.itemSerial.findMany({
+   891→          include: { item: { include: { category: { include: { parent: true } } } }, entity: true },
+   892→          orderBy: { createdAt: 'desc' },
+   893→        })
+   894→
+   895→        if (reportType === 'status-wise') {
+   896→          const byStatus: Record<string, any> = {}
+   897→          for (const s of serials) {
+   898→            const key = s.status
+   899→            if (!byStatus[key]) byStatus[key] = { status: key, count: 0, items: new Set() }
+   900→            byStatus[key].count++
+   901→            byStatus[key].items.add(s.item?.name)
+   902→          }
+   903→          const rows = Object.values(byStatus).map((r: any, i: number) => ({
+   904→            sl: i + 1, status: r.status, count: r.count, uniqueItems: r.items.size,
+   905→          }))
+   906→          return NextResponse.json({
+   907→            reportType: 'status-wise', range: 'all',
+   908→            rows,
+   909→            totalSerials: serials.length,
+   910→          })
+   911→        }
+   912→
+   913→        if (reportType === 'item-wise') {
+   914→          const byItem: Record<string, any> = {}
+   915→          for (const s of serials) {
+   916→            const key = s.item?.name || 'Unknown'
+   917→            if (!byItem[key]) byItem[key] = { itemName: key, itemCode: s.item?.itemCode, total: 0, inStock: 0, sold: 0, other: 0 }
+   918→            byItem[key].total++
+   919→            if (s.status === 'IN_STOCK') byItem[key].inStock++
+   920→            else if (s.status === 'SOLD') byItem[key].sold++
+   921→            else byItem[key].other++
+   922→          }
+   923→          const rows = Object.values(byItem).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   924→          return NextResponse.json({
+   925→            reportType: 'item-wise', range: 'all',
+   926→            rows,
+   927→            totalSerials: serials.length,
+   928→          })
+   929→        }
+   930→
+   931→        if (reportType === 'entity-wise') {
+   932→          const byEntity: Record<string, any> = {}
+   933→          for (const s of serials) {
+   934→            const key = s.entity?.name || 'Unknown'
+   935→            if (!byEntity[key]) byEntity[key] = { entity: key, total: 0, inStock: 0, sold: 0, other: 0 }
+   936→            byEntity[key].total++
+   937→            if (s.status === 'IN_STOCK') byEntity[key].inStock++
+   938→            else if (s.status === 'SOLD') byEntity[key].sold++
+   939→            else byEntity[key].other++
+   940→          }
+   941→          const rows = Object.values(byEntity).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+   942→          return NextResponse.json({
+   943→            reportType: 'entity-wise', range: 'all',
+   944→            rows,
+   945→            totalSerials: serials.length,
+   946→          })
+   947→        }
+   948→
+   949→        if (reportType === 'details') {
+   950→          const rows = serials.map((s, i) => ({
+   951→            sl: i + 1,
+   952→            serialNumber: s.serialNumber,
+   953→            barcode: s.barcode || '—',
+   954→            itemName: s.item?.name || '—',
+   955→            itemCode: s.item?.itemCode || '—',
+   956→            category: s.item?.category?.parent?.name || s.item?.category?.name || '—',
+   957→            entity: s.entity?.name || '—',
+   958→            status: s.status,
+   959→            createdAt: s.createdAt,
+   960→          }))
+   961→          return NextResponse.json({
+   962→            reportType: 'details', range: 'all',
+   963→            rows,
+   964→            totalSerials: serials.length,
+   965→          })
+   966→        }
+   967→
+   968→        return NextResponse.json({ error: 'Unknown reportType for serial-report. Available: status-wise, item-wise, entity-wise, details' }, { status: 400 })
+   969→      }
+   970→
+   971→      default:
+   972→        return NextResponse.json({ error: 'Unknown report type' }, { status: 400 })
+   973→    }
+   974→  } catch (e: any) {
+   975→    return NextResponse.json({ error: e.message }, { status: 500 })
+   976→  }
+   977→}
+   978→

@@ -4,10 +4,15 @@ import { RESOURCES } from '@/lib/resources'
 
 const API = '/api/resource'
 
-// Simple in-memory cache with TTL (3 seconds — short enough to stay fresh, long enough to dedupe rapid calls)
+// Simple in-memory cache with TTL.
+// List endpoints use a longer TTL (15s) because they return collections that
+// tolerate brief staleness and are re-fetched on every navigation — caching
+// them dramatically speeds up back-to-back page loads.
+// Detail endpoints (getOne) use a shorter TTL (3s) so edits reflect quickly.
 type CacheEntry = { data: any; expires: number; promise?: Promise<any> }
 const cache = new Map<string, CacheEntry>()
-const DEFAULT_TTL = 3000 // 3 seconds
+const LIST_TTL = 15000   // 15 seconds — list/stockView/report collections
+const DETAIL_TTL = 3000  // 3 seconds — single-record detail lookups
 
 // Dedup in-flight requests — if same URL is being fetched, wait for existing promise
 const inflight = new Map<string, Promise<any>>()
@@ -22,7 +27,7 @@ function getCached<T>(key: string): T | null {
   return entry.data as T
 }
 
-function setCached<T>(key: string, data: T, ttl = DEFAULT_TTL) {
+function setCached<T>(key: string, data: T, ttl = DETAIL_TTL) {
   cache.set(key, { data, expires: Date.now() + ttl })
 }
 
@@ -45,7 +50,7 @@ export async function list<T = any>(slug: keyof typeof RESOURCES, params?: Recor
   const promise = fetch(cacheKey).then(async (r) => {
     if (!r.ok) throw new Error(await r.text())
     const data = await r.json()
-    setCached(cacheKey, data, ttl)
+    setCached(cacheKey, data, ttl ?? LIST_TTL)
     inflight.delete(cacheKey)
     return data
   }).catch((e) => {
@@ -64,7 +69,7 @@ export async function getOne<T = any>(slug: keyof typeof RESOURCES, id: string):
   const r = await fetch(cacheKey)
   if (!r.ok) throw new Error(await r.text())
   const data = await r.json()
-  setCached(cacheKey, data)
+  setCached(cacheKey, data, DETAIL_TTL)
   return data
 }
 
@@ -120,7 +125,7 @@ export async function stockView(entityId?: string, all?: boolean, withSerials = 
   const r = await fetch(cacheKey)
   if (!r.ok) throw new Error(await r.text())
   const data = await r.json()
-  setCached(cacheKey, data)
+  setCached(cacheKey, data, LIST_TTL)
   return data
 }
 
@@ -132,6 +137,6 @@ export async function report(type: string, params?: Record<string, string>) {
   const r = await fetch(cacheKey)
   if (!r.ok) throw new Error(await r.text())
   const data = await r.json()
-  setCached(cacheKey, data)
+  setCached(cacheKey, data, LIST_TTL)
   return data
 }

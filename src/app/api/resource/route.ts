@@ -326,14 +326,14 @@ async function diagnoseFkFailure(slug: string, payload: any): Promise<{
 
   collect(payload, slug)
 
-  // Check each reference
-  for (const ref of checked) {
+  // Check each reference in PARALLEL (same N+1 fix as validateFkReferences).
+  await Promise.all(checked.map(async (ref) => {
     try {
       // @ts-expect-error dynamic model access
       const m = db[ref.model]
       if (!m || !m.findUnique) {
         ref.exists = true // can't check, assume valid
-        continue
+        return
       }
       const row = await m.findUnique({ where: { id: ref.id }, select: { id: true } })
       ref.exists = !!row
@@ -344,7 +344,7 @@ async function diagnoseFkFailure(slug: string, payload: any): Promise<{
       console.error('[diagnoseFkFailure] error checking', ref, e.message)
       ref.exists = true // can't check, assume valid
     }
-  }
+  }))
 
   return { checked, invalid }
 }
@@ -392,21 +392,30 @@ async function validateFkReferences(slug: string, payload: any): Promise<string 
 
   collect(payload, slug)
 
-  // Verify each reference exists in the DB
-  for (const ref of refs) {
+  if (refs.length === 0) return null
+
+  // Verify each reference exists in the DB — run all checks in PARALLEL
+  // instead of sequentially. Previously this was an N+1 `for...await` loop
+  // where each findUnique waited for the previous one; with N FK fields that
+  // meant N sequential round-trips to Turso. Promise.all fans them out so the
+  // total latency is ~1 round-trip (bounded by the slowest single query).
+  const results = await Promise.all(refs.map(async (ref) => {
     try {
       // @ts-expect-error dynamic model access
       const m = db[ref.model]
-      if (!m || !m.findUnique) continue
+      if (!m || !m.findUnique) return null // can't check, assume valid
       const row = await m.findUnique({ where: { id: ref.id }, select: { id: true } })
-      if (!row) {
-        return `${ref.field}="${ref.id}" does not exist in ${ref.model} (at ${ref.context}). ` +
-               `Please refresh the page and reselect the ${ref.field.replace(/Id$/, '').toLowerCase()}.`
-      }
+      return row ? null : ref // return the ref if it does NOT exist
     } catch (e: any) {
       // If the model lookup fails for some reason, skip pre-flight and let Prisma handle it
       console.error('[validateFkReferences] skip', ref, e.message)
+      return null
     }
+  }))
+  const failed = results.find((r) => r !== null)
+  if (failed) {
+    return `${failed.field}="${failed.id}" does not exist in ${failed.model} (at ${failed.context}). ` +
+           `Please refresh the page and reselect the ${failed.field.replace(/Id$/, '').toLowerCase()}.`
   }
   return null
 }

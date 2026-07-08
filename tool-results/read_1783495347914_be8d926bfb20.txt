@@ -1,0 +1,543 @@
+     1→'use client'
+     2→import { useEffect, useState } from 'react'
+     3→import { useApp } from '@/lib/store'
+     4→import { useAuth } from '@/lib/auth-store'
+     5→import { Sidebar } from '@/components/shared/Sidebar'
+     6→import { NewsTicker } from '@/components/shared/NewsTicker'
+     7→import { LoginPage } from '@/components/shared/LoginPage'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Menu, X, LogOut, User as UserIcon, Loader2, Building2, Bell, MessageCircle, X as XIcon, Send, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+    10→import {
+    11→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+    12→  DropdownMenuSeparator, DropdownMenuTrigger,
+    13→} from '@/components/ui/dropdown-menu'
+    14→import { Dashboard } from '@/components/modules/Dashboard'
+    15→import { EntitiesPage } from '@/components/modules/EntitiesPage'
+    16→import { DepartmentsPage } from '@/components/modules/DepartmentsPage'
+    17→import { EmployeesPage } from '@/components/modules/EmployeesPage'
+    18→import { UomsPage } from '@/components/modules/UomsPage'
+    19→import { SuppliersPage } from '@/components/modules/SuppliersPage'
+    20→import { CategoriesPage } from '@/components/modules/CategoriesPage'
+    21→import { ItemsPage } from '@/components/modules/ItemsPage'
+    22→import { ItemSerialsPage } from '@/components/modules/ItemSerialsPage'
+    23→import { NewsTickerPage } from '@/components/modules/NewsTickerPage'
+    24→import { PurchaseRequisitionsPage } from '@/components/modules/PurchaseRequisitionsPage'
+    25→import { PurchasesPage } from '@/components/modules/PurchasesPage'
+    26→import { PurchaseApprovalPage } from '@/components/modules/PurchaseApprovalPage'
+    27→import { PurchaseReturnsPage } from '@/components/modules/PurchaseReturnsPage'
+    28→import { PurchaseReceivePage } from '@/components/modules/PurchaseReceivePage'
+    29→import { StockAllPage } from '@/components/modules/StockAllPage'
+    30→import { StockMinePage } from '@/components/modules/StockMinePage'
+    31→import { InternalTransfersPage } from '@/components/modules/InternalTransfersPage'
+    32→import { InternalReceivePage } from '@/components/modules/InternalReceivePage'
+    33→import { AdjustmentsPage } from '@/components/modules/AdjustmentsPage'
+    34→import { SalesPage } from '@/components/modules/SalesPage'
+    35→import { SalesDeliveryPage } from '@/components/modules/SalesDeliveryPage'
+    36→import { SalesReturnsPage } from '@/components/modules/SalesReturnsPage'
+    37→import { SalesRefundsPage } from '@/components/modules/SalesRefundsPage'
+    38→import { AccountsExpensesPage } from '@/components/modules/AccountsExpensesPage'
+    39→import { AccountsReceivePage } from '@/components/modules/AccountsReceivePage'
+    40→import { ReportsStockPage } from '@/components/modules/ReportsStockPage'
+    41→import { ReportsPurchasePage } from '@/components/modules/ReportsPurchasePage'
+    42→import { ReportsSalesPage } from '@/components/modules/ReportsSalesPage'
+    43→import { ReportsAccountsPage } from '@/components/modules/ReportsAccountsPage'
+    44→import { ReportsSerialPage } from '@/components/modules/ReportsSerialPage'
+    45→import { ManagePermissionsPage } from '@/components/modules/ManagePermissionsPage'
+    46→import { EmployeeEditPage } from '@/components/modules/EmployeeEditPage'
+    47→import { LoginSettingsPage } from '@/components/modules/LoginSettingsPage'
+    48→import { ItemEditPage } from '@/components/modules/ItemEditPage'
+    49→import { AccountTypesPage } from '@/components/modules/AccountTypesPage'
+    50→import { BankInfosPage } from '@/components/modules/BankInfosPage'
+    51→import { PurchaseEntryPage } from '@/components/modules/PurchaseEntryPage'
+    52→import { SalesEntryPage } from '@/components/modules/SalesEntryPage'
+    53→import { InternalTransferEntryPage } from '@/components/modules/InternalTransferEntryPage'
+    54→import { InternalReceiveEntryPage } from '@/components/modules/InternalReceiveEntryPage'
+    55→import { BarcodePrintPage } from '@/components/modules/BarcodePrintPage'
+    56→import { QRCodePrintPage } from '@/components/modules/QRCodePrintPage'
+    57→import { AdjustmentEntryPage } from '@/components/modules/AdjustmentEntryPage'
+    58→import { AdjustmentApprovalPage, AdjustmentApprovalViewPage } from '@/components/modules/AdjustmentApprovalPage'
+    59→import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
+    60→import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
+    61→
+    62→export function AppShell() {
+    63→  const { active, sidebarOpen, toggleSidebar, setActive, selectedEntityId, selectedEntityName, clearSelectedEntity, sidebarCollapsed, toggleSidebarCollapsed } = useApp()
+    64→  const { user, loading, setAuth, setLoading, logout } = useAuth()
+    65→  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+    66→  const [notifOpen, setNotifOpen] = useState(false)
+    67→  const [notifications, setNotifications] = useState<any[]>([])
+    68→  const [chatOpen, setChatOpen] = useState(false)
+    69→  const [chatMessages, setChatMessages] = useState<{role: string, text: string}[]>([])
+    70→  const [chatInput, setChatInput] = useState('')
+    71→
+    72→  // Fetch current user on mount
+    73→  useEffect(() => {
+    74→    fetch('/api/auth/me')
+    75→      .then((r) => r.json())
+    76→      .then((d) => {
+    77→        if (d && d.id) setAuth(d)
+    78→        else setAuth(null)
+    79→      })
+    80→      .catch(() => setAuth(null))
+    81→      .finally(() => setLoading(false))
+    82→  }, [setAuth, setLoading])
+    83→
+    84→  // On mount: restore entity from sessionStorage (if present) and process hash routing.
+    85→  // Both steps run in the SAME effect so the entity restore settles BEFORE the hash module
+    86→  // is activated — this is what makes "Open in new tab" from the sidebar land on the target
+    87→  // page instead of the entity selection page.
+    88→  useEffect(() => {
+    89→    if (typeof window === 'undefined') return
+    90→
+    91→    // 1) Restore entity from localStorage if present (localStorage is shared across tabs)
+    92→    const stored = localStorage.getItem('selectedEntityId')
+    93→    const storedName = localStorage.getItem('selectedEntityName')
+    94→    if (stored && storedName) {
+    95→      useApp.getState().setSelectedEntity(stored, storedName)
+    96→    }
+    97→
+    98→    // 2) Hash-based routing — if URL has #module, open that module (for new tab)
+    99→    if (window.location.hash) {
+   100→      const hash = window.location.hash.substring(1)
+   101→      const validModules = [
+   102→        'dashboard', 'entities', 'departments', 'employees', 'uoms', 'suppliers',
+   103→        'categories', 'items', 'item-serials', 'news-ticker', 'login-settings',
+   104→        'account-types', 'bank-infos', 'purchase-requisitions', 'purchases',
+   105→        'purchase-approvals', 'purchase-returns', 'purchase-receive', 'stock-all', 'stock-mine',
+   106→        'internal-transfers', 'internal-receive', 'adjustments', 'sales',
+   107→        'sales-delivery', 'sales-returns', 'sales-refunds', 'accounts-expenses',
+   108→        'accounts-receive', 'reports-stock', 'reports-purchase', 'reports-sales',
+   109→        'reports-accounts', 'reports-serial', 'manage-permissions',
+   110→        'purchase-entry',
+   111→        'sales-entry',
+   112→        'internal-transfer-entry',
+   113→        'internal-receive-entry',
+   114→        'barcode-print',
+   115→        'qr-code-print',
+   116→        'adjustment-entry',
+   117→        'adjustment-approval',
+   118→        'adjustment-approval-view',
+   119→      ]
+   120→      if (validModules.includes(hash)) {
+   121→        setTimeout(() => useApp.getState().setActive(hash as any), 0)
+   122→      }
+   123→    }
+   124→  }, [])
+   125→
+   126→  // Fetch notifications (pending approvals, low stock, etc.)
+   127→  useEffect(() => {
+   128→    if (!user || !selectedEntityId) return
+   129→    const fetchNotifs = async () => {
+   130→      try {
+   131→        const [purchases, sales, reqs] = await Promise.all([
+   132→          fetch('/api/resource?slug=purchases&status=SUBMITTED').then(r => r.json()).catch(() => []),
+   133→          fetch('/api/resource?slug=sales&status=PENDING').then(r => r.json()).catch(() => []),
+   134→          fetch('/api/resource?slug=purchase-requisitions&status=PENDING').then(r => r.json()).catch(() => []),
+   135→        ])
+   136→        const notifs: any[] = []
+   137→        if (Array.isArray(purchases)) {
+   138→          purchases.forEach((p: any) => {
+   139→            notifs.push({ type: 'purchase', text: `Purchase ${p.purchaseNo} awaiting approval`, id: p.id, module: 'purchase-approvals' })
+   140→          })
+   141→        }
+   142→        if (Array.isArray(sales)) {
+   143→          sales.forEach((s: any) => {
+   144→            notifs.push({ type: 'sales', text: `Sales ${s.salesNo} pending delivery`, id: s.id, module: 'sales-delivery' })
+   145→          })
+   146→        }
+   147→        if (Array.isArray(reqs)) {
+   148→          reqs.forEach((r: any) => {
+   149→            notifs.push({ type: 'req', text: `Requisition ${r.reqNo} awaiting approval`, id: r.id, module: 'purchase-requisitions' })
+   150→          })
+   151→        }
+   152→        setNotifications(notifs)
+   153→      } catch {}
+   154→    }
+   155→    fetchNotifs()
+   156→    const interval = setInterval(fetchNotifs, 60000) // refresh every 60s
+   157→    return () => clearInterval(interval)
+   158→  }, [user, selectedEntityId])
+   159→
+   160→  // Chat send
+   161→  const sendChat = () => {
+   162→    if (!chatInput.trim()) return
+   163→    const msg = chatInput.trim()
+   164→    setChatMessages(prev => [...prev, { role: 'user', text: msg }])
+   165→    setChatInput('')
+   166→    // Simulated response
+   167→    setTimeout(() => {
+   168→      setChatMessages(prev => [...prev, { role: 'bot', text: 'Thank you for your message. Our support team will get back to you soon. For urgent issues, call 01534955065.' }])
+   169→    }, 1000)
+   170→  }
+   171→
+   172→  if (loading) {
+   173→    return (
+   174→      <div className="min-h-screen flex items-center justify-center">
+   175→        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+   176→      </div>
+   177→    )
+   178→  }
+   179→
+   180→  if (!user) return <LoginPage />
+   181→
+   182→  // After login, check if entity is selected (in store) or available in localStorage
+   183→  // localStorage is shared across tabs — so new tab can restore entity from it
+   184→  const hasStoredEntity =
+   185→    typeof window !== 'undefined' && !!localStorage.getItem('selectedEntityId')
+   186→  if (!selectedEntityId && !hasStoredEntity) {
+   187→    return <EntitySelectionPage />
+   188→  }
+   189→
+   190→  const handleLogout = async () => {
+   191→    await logout()
+   192→    clearSelectedEntity()
+   193→    localStorage.removeItem('selectedEntityId')
+   194→    localStorage.removeItem('selectedEntityName')
+   195→    localStorage.removeItem('selectedEntityCode')
+   196→    setActive('dashboard')
+   197→  }
+   198→
+   199→  return (
+   200→    <div className="flex min-h-screen flex-col">
+   201→      {/* Sticky top section — header + news ticker stay fixed when scrolling */}
+   202→      <div className="sticky top-0 z-40">
+   203→        {/* Top bar */}
+   204→        <header className="h-14 border-b flex items-center gap-2 px-3 sm:px-4 bg-card">
+   205→          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(true)}>
+   206→            <Menu className="h-5 w-5" />
+   207→          </Button>
+   208→        {/* Desktop sidebar toggle — hides/shows the sidebar */}
+   209→        <Button variant="ghost" size="icon" className="hidden md:flex" onClick={toggleSidebarCollapsed} title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+   210→          {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+   211→        </Button>
+   212→        <div className="flex items-center gap-2">
+   213→          <div className="h-7 w-7 rounded-md bg-gradient-to-br from-purple-500 to-blue-500 text-white flex items-center justify-center text-xs font-bold">DF</div>
+   214→          <div className="hidden sm:block">
+   215→            <div className="text-sm font-bold leading-tight">DFCL-IT</div>
+   216→            <div className="text-[10px] text-muted-foreground">(Test System)</div>
+   217→          </div>
+   218→        </div>
+   219→        <div className="flex-1" />
+   220→        {/* Notification bell */}
+   221→        <div className="relative">
+   222→          <Button variant="ghost" size="icon" className="h-9 w-9 relative" onClick={() => setNotifOpen(!notifOpen)}>
+   223→            <Bell className="h-4 w-4" />
+   224→            {notifications.length > 0 && (
+   225→              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+   226→                {notifications.length > 9 ? '9+' : notifications.length}
+   227→              </span>
+   228→            )}
+   229→          </Button>
+   230→          {notifOpen && (
+   231→            <div className="absolute right-0 top-full mt-1 w-80 bg-card border rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+   232→              <div className="px-3 py-2 border-b font-semibold text-sm flex items-center justify-between">
+   233→                <span>Notifications</span>
+   234→                <span className="text-xs text-muted-foreground">{notifications.length} new</span>
+   235→              </div>
+   236→              {notifications.length === 0 ? (
+   237→                <div className="px-3 py-6 text-center text-sm text-muted-foreground">No new notifications</div>
+   238→              ) : (
+   239→                notifications.map((n, i) => (
+   240→                  <button
+   241→                    key={i}
+   242→                    onClick={() => { setActive(n.module as any); setNotifOpen(false) }}
+   243→                    className="w-full text-left px-3 py-2.5 border-b last:border-b-0 hover:bg-accent transition-colors flex items-start gap-2"
+   244→                  >
+   245→                    <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${n.type === 'purchase' ? 'bg-amber-500' : n.type === 'sales' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+   246→                    <span className="text-xs">{n.text}</span>
+   247→                  </button>
+   248→                ))
+   249→              )}
+   250→            </div>
+   251→          )}
+   252→        </div>
+   253→        {/* Selected entity badge */}
+   254→        <button
+   255→          onClick={() => setActive('entity-selection')}
+   256→          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors text-xs"
+   257→          title="Change entity"
+   258→        >
+   259→          <Building2 className="h-3.5 w-3.5 text-blue-600" />
+   260→          <span className="font-medium text-blue-700">{selectedEntityName || 'Select Entity'}</span>
+   261→        </button>
+   262→        <DropdownMenu>
+   263→          <DropdownMenuTrigger asChild>
+   264→            <Button variant="ghost" size="sm" className="gap-2">
+   265→              {user.employee?.photo ? (
+   266→                <img
+   267→                  src={user.employee.photo}
+   268→                  alt={user.employee?.name || user.userId}
+   269→                  className="h-7 w-7 rounded-full object-cover border"
+   270→                />
+   271→              ) : (
+   272→                <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+   273→                  {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
+   274→                </div>
+   275→              )}
+   276→              <div className="hidden sm:block text-left">
+   277→                <div className="text-xs font-medium leading-tight">{user.employee?.name || user.userId}</div>
+   278→                <div className="text-[10px] text-muted-foreground leading-tight">
+   279→                  {user.role === 'ADMIN' ? '👑 Administrator' : 'User'} · {user.userId}
+   280→                </div>
+   281→              </div>
+   282→            </Button>
+   283→          </DropdownMenuTrigger>
+   284→          <DropdownMenuContent align="end" className="w-56">
+   285→            <DropdownMenuLabel>
+   286→              <div className="flex items-center gap-2 mb-1">
+   287→                {user.employee?.photo ? (
+   288→                  <img
+   289→                    src={user.employee.photo}
+   290→                    alt={user.employee?.name || user.userId}
+   291→                    className="h-10 w-10 rounded-full object-cover border"
+   292→                  />
+   293→                ) : (
+   294→                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+   295→                    {user.employee?.name?.[0]?.toUpperCase() || user.userId[0].toUpperCase()}
+   296→                  </div>
+   297→                )}
+   298→                <div>
+   299→                  <div className="text-sm font-medium">{user.employee?.name || user.userId}</div>
+   300→                  <div className="text-xs text-muted-foreground font-normal">{user.employee?.designation || '—'}</div>
+   301→                </div>
+   302→              </div>
+   303→              <div className="text-xs text-muted-foreground font-normal">{user.employee?.email || user.userId}</div>
+   304→            </DropdownMenuLabel>
+   305→            <DropdownMenuSeparator />
+   306→            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+   307→              <LogOut className="h-4 w-4 mr-2" /> Logout
+   308→            </DropdownMenuItem>
+   309→          </DropdownMenuContent>
+   310→        </DropdownMenu>
+   311→      </header>
+   312→
+   313→      <NewsTicker />
+   314→      </div>{/* end sticky top section */}
+   315→
+   316→      <div className="flex flex-1">
+   317→        {/* Desktop sidebar — hidden when sidebarCollapsed is true */}
+   318→        {!sidebarCollapsed && (
+   319→          <div className="hidden md:block">
+   320→            <Sidebar />
+   321→          </div>
+   322→        )}
+   323→        {/* Mobile drawer */}
+   324→        {mobileNavOpen && (
+   325→          <div className="md:hidden fixed inset-0 z-50 flex">
+   326→            <div className="w-64 bg-card border-r shadow-lg">
+   327→              <div className="h-14 border-b flex items-center justify-between px-4">
+   328→                <span className="text-sm font-bold">Menu</span>
+   329→                <Button variant="ghost" size="icon" onClick={() => setMobileNavOpen(false)}>
+   330→                  <X className="h-4 w-4" />
+   331→                </Button>
+   332→              </div>
+   333→              <MobileNav onClose={() => setMobileNavOpen(false)} />
+   334→            </div>
+   335→            <div className="flex-1 bg-black/30" onClick={() => setMobileNavOpen(false)} />
+   336→          </div>
+   337→        )}
+   338→        <main className="flex-1 p-3 sm:p-6 overflow-x-hidden">
+   339→          <ModuleRouter active={active} />
+   340→        </main>
+   341→      </div>
+   342→
+   343→      <footer className="border-t py-3 px-4 text-xs text-muted-foreground text-center">
+   344→        DFCL-IT (Test System) © 2026 — Idea & Developed by Abdur Rahman Akash · WhatsApp: 01534955065
+   345→      </footer>
+   346→
+   347→      {/* Floating Chat Widget — bottom right */}
+   348→      {chatOpen && (
+   349→        <div className="fixed bottom-20 right-4 w-80 h-96 bg-card rounded-lg shadow-2xl border z-50 flex flex-col">
+   350→          {/* Chat header */}
+   351→          <div className="flex items-center justify-between px-4 py-2.5 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
+   352→            <div className="flex items-center gap-2">
+   353→              <MessageCircle className="h-4 w-4" />
+   354→              <span className="text-sm font-semibold">Support Chat</span>
+   355→            </div>
+   356→            <button onClick={() => setChatOpen(false)} className="hover:bg-white/20 rounded p-1">
+   357→              <XIcon className="h-4 w-4" />
+   358→            </button>
+   359→          </div>
+   360→          {/* Chat messages */}
+   361→          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+   362→            {chatMessages.length === 0 && (
+   363→              <div className="text-center text-xs text-muted-foreground py-8">
+   364→                <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+   365→                <p>Hi! How can we help you?</p>
+   366→                <p className="mt-1">Type your message below.</p>
+   367→              </div>
+   368→            )}
+   369→            {chatMessages.map((m, i) => (
+   370→              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+   371→                <div className={`max-w-[80%] px-3 py-1.5 rounded-lg text-xs ${m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-muted text-foreground'}`}>
+   372→                  {m.text}
+   373→                </div>
+   374→              </div>
+   375→            ))}
+   376→          </div>
+   377→          {/* Chat input */}
+   378→          <div className="p-2 border-t flex gap-1">
+   379→            <input
+   380→              type="text"
+   381→              value={chatInput}
+   382→              onChange={(e) => setChatInput(e.target.value)}
+   383→              onKeyDown={(e) => { if (e.key === 'Enter') sendChat() }}
+   384→              placeholder="Type a message..."
+   385→              className="flex-1 h-9 px-3 border rounded-lg bg-background text-xs focus:outline-none focus:border-blue-500"
+   386→            />
+   387→            <button onClick={sendChat} className="h-9 w-9 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 shrink-0">
+   388→              <Send className="h-3.5 w-3.5" />
+   389→            </button>
+   390→          </div>
+   391→        </div>
+   392→      )}
+   393→
+   394→      {/* Chat toggle button — floating bottom right */}
+   395→      <button
+   396→        onClick={() => setChatOpen(!chatOpen)}
+   397→        className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center z-50"
+   398→        title="Chat with support"
+   399→      >
+   400→        {chatOpen ? <XIcon className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+   401→      </button>
+   402→    </div>
+   403→  )
+   404→}
+   405→
+   406→function MobileNav({ onClose }: { onClose: () => void }) {
+   407→  const { setActive } = useApp()
+   408→  const { hasPerm } = useAuth()
+   409→  return (
+   410→    <div className="p-2 overflow-y-auto h-[calc(100vh-3.5rem)]">
+   411→      <SidebarCompact onPick={() => onClose()} setActive={setActive} hasPerm={hasPerm} />
+   412→    </div>
+   413→  )
+   414→}
+   415→
+   416→import { SECTIONS } from '@/components/shared/SidebarData'
+   417→import { PermissionAction } from '@/lib/auth'
+   418→
+   419→function SidebarCompact({ onPick, setActive, hasPerm }: { onPick: () => void; setActive: (m: any) => void; hasPerm: (m: string, a: PermissionAction) => boolean }) {
+   420→  const [open, setOpen] = useState<Record<string, boolean>>(
+   421→    Object.fromEntries(SECTIONS.map((s) => [s.title, true]))
+   422→  )
+   423→  const visibleSections = SECTIONS.map((sec) => ({
+   424→    ...sec,
+   425→    items: sec.items.filter((item) => hasPerm(item.key as string, 'canView' as PermissionAction)),
+   426→  })).filter((sec) => sec.items.length > 0)
+   427→  return (
+   428→    <div>
+   429→      {visibleSections.map((sec) => {
+   430→        const Icon = sec.icon
+   431→        const isOpen = open[sec.title]
+   432→        return (
+   433→          <div key={sec.title} className="mb-1">
+   434→            <button
+   435→              onClick={() => setOpen((o) => ({ ...o, [sec.title]: !o[sec.title] }))}
+   436→              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-accent"
+   437→            >
+   438→              <Icon className="h-4 w-4" />
+   439→              <span className="flex-1 text-left">{sec.title}</span>
+   440→            </button>
+   441→            {isOpen && (
+   442→              <div className="ml-3 border-l pl-2 mt-0.5 space-y-0.5">
+   443→                {sec.items.map((item) => {
+   444→                  const ItemIcon = item.icon
+   445→                  return (
+   446→                    <button
+   447→                      key={item.key}
+   448→                      onClick={() => { setActive(item.key); onPick() }}
+   449→                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px] hover:bg-accent"
+   450→                    >
+   451→                      <ItemIcon className="h-3.5 w-3.5" />
+   452→                      <span className="flex-1 text-left">{item.label}</span>
+   453→                    </button>
+   454→                  )
+   455→                })}
+   456→              </div>
+   457→            )}
+   458→          </div>
+   459→        )
+   460→      })}
+   461→    </div>
+   462→  )
+   463→}
+   464→
+   465→function ModuleRouter({ active }: { active: any }) {
+   466→  switch (active) {
+   467→    case 'dashboard': return <Dashboard />
+   468→    case 'entities': return <EntitiesPage />
+   469→    case 'departments': return <DepartmentsPage />
+   470→    case 'employees': return <EmployeesPage />
+   471→    case 'uoms': return <UomsPage />
+   472→    case 'suppliers': return <SuppliersPage />
+   473→    case 'categories': return <CategoriesPage />
+   474→    case 'items': return <ItemsPage />
+   475→    case 'item-serials': return <ItemSerialsPage />
+   476→    case 'news-ticker': return <NewsTickerPage />
+   477→    case 'purchase-requisitions': return <PurchaseRequisitionsPage />
+   478→    case 'purchases': return <PurchasesPage />
+   479→    case 'purchase-approvals': return <PurchaseApprovalPage />
+   480→    case 'purchase-returns': return <PurchaseReturnsPage />
+   481→    case 'purchase-receive': return <PurchaseReceivePage />
+   482→    case 'stock-all': return <StockAllPage />
+   483→    case 'stock-mine': return <StockMinePage />
+   484→    case 'internal-transfers': return <InternalTransfersPage />
+   485→    case 'internal-receive': return <InternalReceivePage />
+   486→    case 'adjustments': return <AdjustmentsPage />
+   487→    case 'sales': return <SalesPage />
+   488→    case 'sales-delivery': return <SalesDeliveryPage />
+   489→    case 'sales-returns': return <SalesReturnsPage />
+   490→    case 'sales-refunds': return <SalesRefundsPage />
+   491→    case 'accounts-expenses': return <AccountsExpensesPage />
+   492→    case 'accounts-receive': return <AccountsReceivePage />
+   493→    case 'reports-stock': return <ReportsStockPage />
+   494→    case 'reports-purchase': return <ReportsPurchasePage />
+   495→    case 'reports-sales': return <ReportsSalesPage />
+   496→    case 'reports-accounts': return <ReportsAccountsPage />
+   497→    case 'reports-serial': return <ReportsSerialPage />
+   498→    case 'manage-permissions': return <ManagePermissionsPage />
+   499→    case 'employee-edit': return <EmployeeEditPage />
+   500→    case 'login-settings': return <LoginSettingsPage />
+   501→    case 'item-edit': return <ItemEditPage />
+   502→    case 'account-types': return <AccountTypesPage />
+   503→    case 'bank-infos': return <BankInfosPage />
+   504→    case 'purchase-entry': return <PurchaseEntryPage />
+   505→    case 'sales-entry': return <SalesEntryPage />
+   506→    case 'internal-transfer-entry': return <InternalTransferEntryPage />
+   507→    case 'internal-receive-entry': return <InternalReceiveEntryPage />
+   508→    case 'barcode-print': return <BarcodePrintPage />
+   509→    case 'qr-code-print': return <QRCodePrintPage />
+   510→    case 'adjustment-entry': return <AdjustmentEntryPage />
+   511→    case 'adjustment-approval': return <AdjustmentApprovalPage />
+   512→    case 'adjustment-approval-view': return <AdjustmentApprovalViewPage />
+   513→    case 'entity-selection': return <EntitySelectionPage />
+   514→    case 'generic-add-edit': return <GenericAddEditPageWrapper />
+   515→    default: return <Dashboard />
+   516→  }
+   517→}
+   518→
+   519→// Wrapper that reads config from sessionStorage and renders GenericAddEditPage
+   520→function GenericAddEditPageWrapper() {
+   521→  const config = typeof window !== 'undefined' ? sessionStorage.getItem('genericAddEditConfig') : null
+   522→  if (!config) return <div className="p-6 text-sm text-muted-foreground">No config found. Go back.</div>
+   523→  // Parse config outside of any JSX construction so render-time errors are not
+   524→  // swallowed by a try/catch (which would violate react-hooks/error-boundaries).
+   525→  let parsed: { slug: string; title: string; fields: any[]; defaultValues?: Record<string, any>; backTo: any } | null = null
+   526→  try {
+   527→    parsed = JSON.parse(config)
+   528→  } catch {
+   529→    return <div className="p-6 text-sm text-muted-foreground">Invalid config.</div>
+   530→  }
+   531→  if (!parsed) return <div className="p-6 text-sm text-muted-foreground">Invalid config.</div>
+   532→  const { slug, title, fields, defaultValues, backTo } = parsed
+   533→  return (
+   534→    <GenericAddEditPage
+   535→      slug={slug}
+   536→      title={title}
+   537→      fields={fields}
+   538→      defaultValues={defaultValues}
+   539→      backTo={backTo}
+   540→    />
+   541→  )
+   542→}
+   543→
