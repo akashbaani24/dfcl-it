@@ -5,14 +5,14 @@ import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { list } from '@/lib/api'
+import { list, action, getOne } from '@/lib/api'
 import { toast } from 'sonner'
-import { Eye } from 'lucide-react'
+import { Eye, CheckCircle2, XCircle } from 'lucide-react'
 import { usePerm, ExportButtons } from '@/components/shared/Perms'
 import { SearchInput } from '@/components/shared/SearchInput'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
-export function AdjustmentsPage() {
+export function AdjustmentApprovalPage() {
   const perm = usePerm('adjustments')
   const { setActive } = useApp()
   const [rows, setRows] = useState<any[]>([])
@@ -20,11 +20,17 @@ export function AdjustmentsPage() {
   const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<any>(null)
+  const [processing, setProcessing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { setRows(await list('adjustments') as any[]) }
-    finally { setLoading(false) }
+    try {
+      const all = await list('adjustments') as any[]
+      // Show only PENDING adjustments for approval
+      setRows(all.filter((r: any) => r.status === 'PENDING'))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -35,47 +41,49 @@ export function AdjustmentsPage() {
     setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
   }, [q, rows])
 
-  const startNew = () => {
-    setActive('adjustment-entry')
+  const approve = async (id: string) => {
+    setProcessing(true)
+    try {
+      await action('approve-adjustment', id, { approver: 'admin' })
+      toast.success('Adjustment approved — stock updated')
+      setViewing(null)
+      load()
+    } catch (e: any) {
+      let msg = e.message
+      try { const p = JSON.parse(msg); if (p.error) msg = p.error } catch {}
+      toast.error(msg)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const reject = async (id: string) => {
+    setProcessing(true)
+    try {
+      await action('reject-adjustment', id, { approver: 'admin' })
+      toast.success('Adjustment rejected')
+      setViewing(null)
+      load()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setProcessing(false)
+    }
   }
 
   return (
     <div>
       <PageHeader
-        title="Adjustments"
-        description="Stock adjustments — excess, shortage, reject, wastage. Requires approval."
-        onAdd={perm.canCreate ? startNew : undefined}
-        addLabel="New Adjustment"
+        title="Adjustment Approval"
+        description="Review and approve/reject pending stock adjustments"
       />
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <SearchInput value={q} onChange={setQ} placeholder="Search adjustments..." />
-        <ExportButtons
-          module="adjustments"
-          title="Adjustments"
-          rows={rows.map((r) => ({
-            adjustNo: r.adjustNo,
-            date: new Date(r.adjustDate).toLocaleDateString(),
-            entity: r.entity?.name,
-            type: r.type,
-            reason: r.reason,
-            status: r.status,
-            items: r.items?.length || 0,
-          }))}
-          columns={[
-            { key: 'adjustNo', label: 'Adjust No' },
-            { key: 'date', label: 'Date' },
-            { key: 'entity', label: 'Entity' },
-            { key: 'type', label: 'Type' },
-            { key: 'reason', label: 'Reason' },
-            { key: 'status', label: 'Status' },
-            { key: 'items', label: 'Items' },
-          ]}
-        />
       </div>
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
       ) : filtered.length === 0 ? (
-        <EmptyState title="No adjustments" />
+        <EmptyState title="No pending adjustments" hint="All adjustments have been processed" />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -119,7 +127,7 @@ export function AdjustmentsPage() {
         </Card>
       )}
 
-      {/* View dialog */}
+      {/* View + Approve/Reject dialog */}
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -130,7 +138,6 @@ export function AdjustmentsPage() {
             <div><span className="text-muted-foreground">Date:</span> {viewing?.adjustDate && new Date(viewing.adjustDate).toLocaleDateString()}</div>
             <div><span className="text-muted-foreground">Type:</span> {viewing?.type}</div>
             <div><span className="text-muted-foreground">Reason:</span> {viewing?.reason || '—'}</div>
-            <div><span className="text-muted-foreground">Status:</span> {viewing?.status}</div>
           </div>
           <div className="border rounded-md mt-3 overflow-x-auto">
             <Table>
@@ -157,6 +164,15 @@ export function AdjustmentsPage() {
               </TableBody>
             </Table>
           </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setViewing(null)}>Close</Button>
+            <Button variant="destructive" onClick={() => reject(viewing.id)} disabled={processing} className="gap-1">
+              <XCircle className="h-4 w-4" /> Reject
+            </Button>
+            <Button onClick={() => approve(viewing.id)} disabled={processing} className="gap-1 bg-emerald-600 hover:bg-emerald-700">
+              <CheckCircle2 className="h-4 w-4" /> Approve
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

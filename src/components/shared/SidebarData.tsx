@@ -99,4 +99,11 @@ export const SECTIONS: Section[] = [
       { key: 'qr-code-print', label: 'QR Code Print', icon: QrCode },
     ],
   },
+  {
+    title: 'Approvals',
+    icon: ClipboardCheck,
+    items: [
+      { key: 'adjustment-approval', label: 'Adjustment Approval', icon: ClipboardCheck },
+    ],
+  },
 ]
