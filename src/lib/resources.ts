@@ -183,7 +183,11 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     model: 'adjustment',
     include: {
       entity: { select: { id: true, name: true } },
-      items: { select: { id: true, itemId: true, quantity: true } },
+      items: {
+        include: {
+          item: { select: { id: true, name: true, itemCode: true, uom: { select: { shortCode: true } } } },
+        },
+      },
     },
     listSelect: { id: true, adjustNo: true, entityId: true, adjustDate: true, type: true, reason: true, status: true, approvedBy: true, approvedAt: true, createdAt: true },
     writable: true, updatable: true, deletable: true,
