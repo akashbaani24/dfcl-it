@@ -2,8 +2,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react'
 import { list, action, getOne } from '@/lib/api'
 import { toast } from 'sonner'
@@ -11,19 +11,25 @@ import { PageHeader, EmptyState, Badge } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table'
 import { SearchInput } from '@/components/shared/SearchInput'
+import { Textarea } from '@/components/ui/textarea'
 
+// ===== APPROVAL LIST PAGE =====
 export function AdjustmentApprovalPage() {
   const { setActive } = useApp()
   const [rows, setRows] = useState<any[]>([])
   const [q, setQ] = useState('')
   const [filtered, setFiltered] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [processing, setProcessing] = useState(false)
+
+  // Date panel
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const all = await list('adjustments') as any[]
+      // Show ONLY PENDING — approved/rejected are removed from this list
       setRows(all.filter((r: any) => r.status === 'PENDING'))
     } finally { setLoading(false) }
   }, [])
@@ -31,12 +37,16 @@ export function AdjustmentApprovalPage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    if (!q) { setFiltered(rows); return }
-    const ql = q.toLowerCase()
-    setFiltered(rows.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql)))
-  }, [q, rows])
+    let result = rows
+    if (fromDate) result = result.filter(r => new Date(r.adjustDate) >= new Date(fromDate + 'T00:00:00.000Z'))
+    if (toDate) result = result.filter(r => new Date(r.adjustDate) <= new Date(toDate + 'T23:59:59.999Z'))
+    if (q) {
+      const ql = q.toLowerCase()
+      result = result.filter((r: any) => JSON.stringify(r).toLowerCase().includes(ql))
+    }
+    setFiltered(result)
+  }, [q, rows, fromDate, toDate])
 
-  // Open approval view as a separate page (via sessionStorage + route)
   const openView = (row: any) => {
     sessionStorage.setItem('approvingAdjustmentId', row.id)
     setActive('adjustment-approval-view')
@@ -46,65 +56,73 @@ export function AdjustmentApprovalPage() {
     <div>
       <PageHeader title="Adjustment Approval" description="Review and approve/reject pending stock adjustments" />
 
+      {/* Date Panel */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div>
+          <Label className="text-xs font-semibold">From</Label>
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-8 w-36 text-xs mt-0.5" />
+        </div>
+        <div>
+          <Label className="text-xs font-semibold">To</Label>
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-8 w-36 text-xs mt-0.5" />
+        </div>
+        {(fromDate || toDate) && (
+          <Button variant="ghost" size="sm" onClick={() => { setFromDate(''); setToDate('') }} className="mt-4">
+            Clear
+          </Button>
+        )}
+        <SearchInput value={q} onChange={setQ} placeholder="Search..." />
+      </div>
+
       {loading ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
       ) : filtered.length === 0 ? (
         <EmptyState title="No pending adjustments" hint="All adjustments have been processed" />
       ) : (
-        <>
-          <div className="flex items-center gap-2 mb-3">
-            <SearchInput value={q} onChange={setQ} placeholder="Search adjustments..." />
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Adjust No</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Entity</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Adjust No</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((r: any) => (
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => openView(r)}>
+                    <TableCell className="font-mono text-sm">{r.adjustNo}</TableCell>
+                    <TableCell>{new Date(r.adjustDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{r.entity?.name}</TableCell>
+                    <TableCell>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.type === 'INCREASE' ? 'bg-green-100 text-green-700' : r.type === 'DECREASE' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {r.type}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[200px] truncate">{r.reason || '—'}</TableCell>
+                    <TableCell>{r.items?.length || 0}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openView(r) }}>
+                        View
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r: any) => (
-                    <TableRow key={r.id} className="cursor-pointer" onClick={() => openView(r)}>
-                      <TableCell className="font-mono text-sm">{r.adjustNo}</TableCell>
-                      <TableCell>{new Date(r.adjustDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{r.entity?.name}</TableCell>
-                      <TableCell>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.type === 'INCREASE' ? 'bg-green-100 text-green-700' : r.type === 'DECREASE' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {r.type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate">{r.reason || '—'}</TableCell>
-                      <TableCell>{r.items?.length || 0}</TableCell>
-                      <TableCell><Badge status={r.status} /></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openView(r) }}>
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
 }
 
-/**
- * Approval View Page — opens as a full page (not popup) when clicking View.
- * Shows the same layout as the entry form but read-only, with Approve/Reject.
- */
+// ===== APPROVAL VIEW PAGE (opens as full page) =====
 export function AdjustmentApprovalViewPage() {
   const { setActive } = useApp()
   const [adjustment, setAdjustment] = useState<any>(null)
@@ -149,7 +167,6 @@ export function AdjustmentApprovalViewPage() {
     finally { setProcessing(false) }
   }
 
-  // Parse serials field to extract adjust type + barcode + serial
   const parseItem = (it: any) => {
     let adjustType = '—'
     let barcode = '—'
@@ -165,10 +182,8 @@ export function AdjustmentApprovalViewPage() {
         serial = data[1] || '—'
       }
     } else if (it.serials) {
-      // Old format — just barcode/serial
       barcode = it.serials.split(',')[0] || '—'
       serial = it.serials.split(',')[1] || '—'
-      // Try to infer type from the adjustment's overall type
       if (adjustment?.type === 'INCREASE') adjustType = 'EXCESS'
       else if (adjustment?.type === 'DECREASE') adjustType = 'SHORTAGE'
     }
@@ -188,12 +203,10 @@ export function AdjustmentApprovalViewPage() {
       </div>
 
       <div className="border-2 border-black rounded-lg bg-white max-w-4xl mx-auto">
-        {/* Header */}
         <div className="text-center py-3 border-b-2 border-black">
           <h2 className="text-lg font-bold">Adjustment Approval</h2>
         </div>
 
-        {/* Header fields (read-only) */}
         <div className="grid grid-cols-2 gap-0 border-b-2 border-black">
           <div className="p-3 border-r-2 border-black">
             <Label className="text-xs font-bold">Entity (Default)</Label>
@@ -209,18 +222,11 @@ export function AdjustmentApprovalViewPage() {
           </div>
         </div>
 
-        {/* Reason (read-only — user's text only) */}
         <div className="p-3 border-b-2 border-black">
           <Label className="text-xs font-bold">Adjust Reason</Label>
-          <Textarea
-            value={adjustment.reason || '—'}
-            readOnly
-            className="mt-1 bg-slate-50"
-            rows={2}
-          />
+          <Textarea value={adjustment.reason || '—'} readOnly className="mt-1 bg-slate-50" rows={2} />
         </div>
 
-        {/* Items table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-slate-100 border-b-2 border-black">
@@ -260,7 +266,6 @@ export function AdjustmentApprovalViewPage() {
           </table>
         </div>
 
-        {/* Buttons */}
         <div className="flex justify-between p-3 border-t-2 border-black">
           <Button variant="destructive" onClick={reject} disabled={processing} className="gap-1">
             <XCircle className="h-4 w-4" /> Reject
@@ -273,4 +278,3 @@ export function AdjustmentApprovalViewPage() {
     </div>
   )
 }
-
