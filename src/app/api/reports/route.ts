@@ -968,6 +968,176 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Unknown reportType for serial-report. Available: status-wise, item-wise, entity-wise, details' }, { status: 400 })
       }
 
+      // ===== ADJUSTMENT REPORT =====
+      case 'adjustment-report': {
+        const reportType = searchParams.get('reportType') || 'summary'
+        const range = searchParams.get('range') || 'monthly'
+        const from = searchParams.get('from')
+        const to = searchParams.get('to')
+
+        const dateWhere: any = {}
+        const now = new Date()
+        if (range === 'daily') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        } else if (range === 'monthly') {
+          dateWhere.gte = new Date(now.getFullYear(), now.getMonth(), 1)
+        } else if (range === 'yearly') {
+          dateWhere.gte = new Date(now.getFullYear(), 0, 1)
+        } else if (range === 'custom' && from && to) {
+          dateWhere.gte = new Date(from)
+          dateWhere.lte = new Date(to + 'T23:59:59.999Z')
+        }
+
+        const adjustments = await db.adjustment.findMany({
+          where: Object.keys(dateWhere).length > 0 ? { adjustDate: dateWhere } : {},
+          include: {
+            entity: { select: { id: true, name: true } },
+            items: {
+              include: {
+                item: { select: { id: true, name: true, itemCode: true, uom: { select: { shortCode: true } } } },
+              },
+            },
+          },
+          orderBy: { adjustDate: 'desc' },
+        })
+
+        // Helper to parse adjust type from serials field
+        const parseAdjType = (serials: string | null) => {
+          if (!serials) return { adjustType: '—', barcode: '', serial: '' }
+          if (serials.includes('ADJTYPE:')) {
+            const parts = serials.split('|')
+            const typePart = parts.find(p => p.startsWith('ADJTYPE:'))
+            const adjustType = typePart ? typePart.split(':')[1] : '—'
+            const dataParts = parts.filter(p => !p.startsWith('ADJTYPE:') && !p.startsWith('EFFECT:'))
+            const data = dataParts.length > 0 ? dataParts.join('').split(',') : []
+            return { adjustType, barcode: data[0] || '', serial: data[1] || '' }
+          }
+          return { adjustType: '—', barcode: serials.split(',')[0] || '', serial: serials.split(',')[1] || '' }
+        }
+
+        if (reportType === 'summary') {
+          const rows = adjustments.map((a, i) => ({
+            sl: i + 1,
+            adjustNo: a.adjustNo,
+            adjustDate: a.adjustDate,
+            entity: a.entity?.name || '—',
+            type: a.type,
+            reason: a.reason || '—',
+            itemCount: a.items.length,
+            totalQty: a.items.reduce((s: number, it: any) => s + it.quantity, 0),
+            status: a.status,
+          }))
+          return NextResponse.json({
+            reportType: 'summary', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.totalQty, 0),
+          })
+        }
+
+        if (reportType === 'details') {
+          const detailRows: any[] = []
+          let sl = 1
+          for (const a of adjustments) {
+            for (const it of a.items) {
+              const parsed = parseAdjType(it.serials)
+              detailRows.push({
+                sl: sl++,
+                adjustNo: a.adjustNo,
+                adjustDate: a.adjustDate,
+                entity: a.entity?.name || '—',
+                itemName: it.item?.name || '—',
+                itemCode: it.item?.itemCode || '—',
+                barcode: parsed.barcode || '—',
+                serialNumber: parsed.serial || '—',
+                qty: it.quantity,
+                uom: it.item?.uom?.shortCode || '—',
+                adjustType: parsed.adjustType,
+                reason: a.reason || '—',
+                status: a.status,
+              })
+            }
+          }
+          return NextResponse.json({
+            reportType: 'details', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows: detailRows,
+            totalQty: detailRows.reduce((s, r) => s + r.qty, 0),
+          })
+        }
+
+        if (reportType === 'entity-wise') {
+          const byEntity: Record<string, any> = {}
+          for (const a of adjustments) {
+            const key = a.entity?.name || 'Unknown'
+            if (!byEntity[key]) byEntity[key] = { entity: key, count: 0, totalQty: 0, increase: 0, decrease: 0 }
+            byEntity[key].count++
+            byEntity[key].totalQty += a.items.reduce((s: number, it: any) => s + it.quantity, 0)
+            if (a.type === 'INCREASE') byEntity[key].increase += a.items.reduce((s: number, it: any) => s + it.quantity, 0)
+            else byEntity[key].decrease += a.items.reduce((s: number, it: any) => s + it.quantity, 0)
+          }
+          const rows = Object.values(byEntity).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'entity-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.totalQty, 0),
+          })
+        }
+
+        if (reportType === 'type-wise') {
+          const byType: Record<string, any> = {}
+          for (const a of adjustments) {
+            for (const it of a.items) {
+              const parsed = parseAdjType(it.serials)
+              const key = parsed.adjustType !== '—' ? parsed.adjustType : (a.type === 'INCREASE' ? 'EXCESS' : 'SHORTAGE')
+              if (!byType[key]) byType[key] = { adjustType: key, count: 0, totalQty: 0 }
+              byType[key].count++
+              byType[key].totalQty += it.quantity
+            }
+          }
+          const rows = Object.values(byType).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'type-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.totalQty, 0),
+          })
+        }
+
+        if (reportType === 'item-wise') {
+          const byItem: Record<string, any> = {}
+          for (const a of adjustments) {
+            for (const it of a.items) {
+              const key = it.item?.name || 'Unknown'
+              if (!byItem[key]) byItem[key] = { itemName: key, itemCode: it.item?.itemCode, uom: it.item?.uom?.shortCode, count: 0, totalQty: 0 }
+              byItem[key].count++
+              byItem[key].totalQty += it.quantity
+            }
+          }
+          const rows = Object.values(byItem).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'item-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.totalQty, 0),
+          })
+        }
+
+        if (reportType === 'status-wise') {
+          const byStatus: Record<string, any> = {}
+          for (const a of adjustments) {
+            const key = a.status
+            if (!byStatus[key]) byStatus[key] = { status: key, count: 0, totalQty: 0 }
+            byStatus[key].count++
+            byStatus[key].totalQty += a.items.reduce((s: number, it: any) => s + it.quantity, 0)
+          }
+          const rows = Object.values(byStatus).map((r: any, i: number) => ({ sl: i + 1, ...r }))
+          return NextResponse.json({
+            reportType: 'status-wise', range, from: dateWhere.gte, to: dateWhere.lte,
+            rows,
+            totalQty: rows.reduce((s, r) => s + r.totalQty, 0),
+          })
+        }
+
+        return NextResponse.json({ error: 'Unknown reportType for adjustment-report' }, { status: 400 })
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown report type' }, { status: 400 })
     }

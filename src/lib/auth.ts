@@ -44,6 +44,7 @@ export const ALL_MODULES: { key: string; label: string; section: string }[] = [
   { key: 'reports-sales', label: 'Sales Report', section: 'Reports' },
   { key: 'reports-accounts', label: 'Accounts Report', section: 'Reports' },
   { key: 'reports-serial', label: 'Serial Status Report', section: 'Reports' },
+  { key: 'reports-adjustment', label: 'Adjustment Report', section: 'Reports' },
   // Tools
   { key: 'barcode-print', label: 'Barcode Print', section: 'Tools' },
   { key: 'qr-code-print', label: 'QR Code Print', section: 'Tools' },

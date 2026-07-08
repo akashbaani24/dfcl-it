@@ -8,7 +8,7 @@ export type ModuleKey =
   | 'stock-all' | 'stock-mine' | 'internal-transfers' | 'internal-receive' | 'adjustments'
   | 'sales' | 'sales-delivery' | 'sales-returns' | 'sales-refunds'
   | 'accounts-expenses' | 'accounts-receive'
-  | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial'
+  | 'reports-stock' | 'reports-purchase' | 'reports-sales' | 'reports-accounts' | 'reports-serial' | 'reports-adjustment'
   | 'manage-permissions' | 'employee-edit' | 'login-settings' | 'item-edit' | 'account-types'
   | 'generic-add-edit' | 'bank-infos' | 'purchase-entry' | 'entity-selection'
   | 'sales-entry' | 'internal-transfer-entry' | 'internal-receive-entry' | 'barcode-print' | 'qr-code-print'

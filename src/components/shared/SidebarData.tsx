@@ -90,6 +90,7 @@ export const SECTIONS: Section[] = [
       { key: 'reports-sales', label: 'Sales Report', icon: Tags },
       { key: 'reports-accounts', label: 'Accounts Report', icon: BarChart3 },
       { key: 'reports-serial', label: 'Serial Status Report', icon: ScanLine },
+      { key: 'reports-adjustment', label: 'Adjustment Report', icon: Sliders },
     ],
   },
   {

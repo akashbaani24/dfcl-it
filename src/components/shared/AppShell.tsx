@@ -84,6 +84,7 @@ const QRCodePrintPage = dyn(() => import('@/components/modules/QRCodePrintPage')
 const AdjustmentEntryPage = dyn(() => import('@/components/modules/AdjustmentEntryPage').then(m => ({ default: m.AdjustmentEntryPage })))
 const AdjustmentApprovalPage = dyn(() => import('@/components/modules/AdjustmentApprovalPage').then(m => ({ default: m.AdjustmentApprovalPage })))
 const AdjustmentApprovalViewPage = dyn(() => import('@/components/modules/AdjustmentApprovalPage').then(m => ({ default: m.AdjustmentApprovalViewPage })))
+const ReportsAdjustmentPage = dyn(() => import('@/components/modules/ReportsAdjustmentPage').then(m => ({ default: m.ReportsAdjustmentPage })))
 import { EntitySelectionPage } from '@/components/shared/EntitySelectionPage'
 import { GenericAddEditPage } from '@/components/shared/GenericAddEditPage'
 // (module page imports below are lazy — see ModuleLoader / dyn helper)
@@ -145,6 +146,7 @@ export function AppShell() {
         'adjustment-entry',
         'adjustment-approval',
         'adjustment-approval-view',
+        'reports-adjustment',
       ]
       if (validModules.includes(hash)) {
         setTimeout(() => useApp.getState().setActive(hash as any), 0)
@@ -539,6 +541,7 @@ function ModuleRouter({ active }: { active: any }) {
     case 'adjustment-entry': return <AdjustmentEntryPage />
     case 'adjustment-approval': return <AdjustmentApprovalPage />
     case 'adjustment-approval-view': return <AdjustmentApprovalViewPage />
+    case 'reports-adjustment': return <ReportsAdjustmentPage />
     case 'entity-selection': return <EntitySelectionPage />
     case 'generic-add-edit': return <GenericAddEditPageWrapper />
     default: return <Dashboard />
