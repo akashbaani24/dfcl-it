@@ -102,6 +102,7 @@ export const SECTIONS: Section[] = [
   {
     title: 'Approvals',
     icon: ClipboardCheck,
+    defaultOpen: true,
     items: [
       { key: 'adjustment-approval', label: 'Adjustment Approval', icon: ClipboardCheck },
     ],
