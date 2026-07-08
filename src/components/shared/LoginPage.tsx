@@ -33,6 +33,11 @@ export function LoginPage() {
         }
       })
       .catch(() => {})
+
+    // Trigger one-time auto-migration on login page load. This ensures the
+    // production Turso DB has all the latest columns/tables before the user
+    // even logs in. Idempotent and silent.
+    fetch('/api/migrate?auto=1').catch(() => {})
   }, [])
 
   // When userId changes (on blur), check for admin messages

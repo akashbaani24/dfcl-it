@@ -111,6 +111,12 @@ export function AppShell() {
       })
       .catch(() => setAuth(null))
       .finally(() => setLoading(false))
+
+    // Trigger one-time auto-migration on app load. This ensures any new
+    // columns/tables we've added to schema.prisma get applied to the
+    // production Turso DB before the user starts navigating. Idempotent —
+    // safe to call every load. Silent — no UI feedback.
+    fetch('/api/migrate?auto=1').catch(() => {})
   }, [setAuth, setLoading])
 
   // On mount: restore entity from sessionStorage (if present) and process hash routing.

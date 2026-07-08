@@ -50,7 +50,20 @@ export async function GET(req: NextRequest) {
 
   try {
     if (id) {
-      const row = await model.findUnique({ where: { id }, include: cfg.include })
+      let row
+      try {
+        row = await model.findUnique({ where: { id }, include: cfg.include })
+      } catch (findErr: any) {
+        // Self-healing: if a column is missing in the production DB schema,
+        // run auto-migration and retry once. Same pattern as the POST handler.
+        const msg = findErr.message || ''
+        if (msg.includes('no such column') || msg.includes('does not exist in the current database')) {
+          try { await fetch(`${req.nextUrl.origin}/api/migrate?auto=1`) } catch {}
+          row = await model.findUnique({ where: { id }, include: cfg.include })
+        } else {
+          throw findErr
+        }
+      }
       if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       return NextResponse.json(row)
     }
@@ -128,10 +141,25 @@ export async function GET(req: NextRequest) {
       } else {
         queryOptions.include = cfg.include
       }
-      const [rows, total] = await Promise.all([
-        model.findMany(queryOptions),
-        model.count({ where }),
-      ])
+      let rows: any[], total: number
+      try {
+        ;[rows, total] = await Promise.all([
+          model.findMany(queryOptions),
+          model.count({ where }),
+        ])
+      } catch (listErr: any) {
+        // Self-healing: column missing → migrate and retry
+        const msg = listErr.message || ''
+        if (msg.includes('no such column') || msg.includes('does not exist in the current database')) {
+          try { await fetch(`${req.nextUrl.origin}/api/migrate?auto=1`) } catch {}
+          ;[rows, total] = await Promise.all([
+            model.findMany(queryOptions),
+            model.count({ where }),
+          ])
+        } else {
+          throw listErr
+        }
+      }
       return NextResponse.json({
         data: rows,
         total,
@@ -151,7 +179,19 @@ export async function GET(req: NextRequest) {
     } else {
       queryOptions.include = cfg.include
     }
-    const rows = await model.findMany(queryOptions)
+    let rows: any[]
+    try {
+      rows = await model.findMany(queryOptions)
+    } catch (listErr: any) {
+      // Self-healing: column missing → migrate and retry
+      const msg = listErr.message || ''
+      if (msg.includes('no such column') || msg.includes('does not exist in the current database')) {
+        try { await fetch(`${req.nextUrl.origin}/api/migrate?auto=1`) } catch {}
+        rows = await model.findMany(queryOptions)
+      } else {
+        throw listErr
+      }
+    }
     return NextResponse.json(rows)
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -476,7 +516,19 @@ export async function PATCH(req: NextRequest) {
   try {
     // Same sanitization as POST: empty strings on FK fields → undefined.
     const sanitizedData = sanitizePayload({ ...data })
-    const row = await model.update({ where: { id }, data: sanitizedData, include: cfg.include })
+    let row
+    try {
+      row = await model.update({ where: { id }, data: sanitizedData, include: cfg.include })
+    } catch (updateErr: any) {
+      // Self-healing: column missing → migrate and retry
+      const msg = updateErr.message || ''
+      if (msg.includes('no such column') || msg.includes('does not exist in the current database')) {
+        try { await fetch(`${req.nextUrl.origin}/api/migrate?auto=1`) } catch {}
+        row = await model.update({ where: { id }, data: sanitizedData, include: cfg.include })
+      } else {
+        throw updateErr
+      }
+    }
     return NextResponse.json(row)
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
